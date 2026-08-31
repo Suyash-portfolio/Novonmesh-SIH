@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Detected Plates{% endblock %}
+{% block content %}
+<div>
+    <div class="page-header">
+        <p class="mono-label">ANPR Verification</p>
+        <h1>Detected Plates</h1>
+        <p>All license plates recognized by the AI engine from processed videos. Click any plate to view evidence frames and full OCR history.</p>
+    </div>
+
+    <div id="summary-cards" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;"></div>
+
+    <div class="panel p-5" style="margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="text" id="search-input" placeholder="Search plate, global ID, raw text..."
+                    style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--foreground); font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; width: 280px;"
+                    oninput="debounceSearch()">
+                <select id="confidence-filter"
+                    style="background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--foreground); font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;"
+                    onchange="loadPlates()">
+                    <option value="all">All Confidence</option>
+                    <option value="high">High (>= 85%)</option>
+                    <option value="medium">Medium (60-84%)</option>
+                    <option value="low">Low (< 60%)</option>
+                </select>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadPlates()">Refresh</button>
+        </div>
+        <div id="plates-table-container">
+            <p style="text-align: center; color: var(--muted-foreground); padding: 40px;">Loading detected plates...</p>
+        </div>
+    </div>
+
+    <div id="plate-detail-panel" style="display: none;">
+        <div class="panel p-5">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h2 style="font-size: 1.1rem; font-weight: 600;">Plate Detail</h2>
+                <button class="btn btn-secondary btn-sm" onclick="closeDetail()">Close</button>
+            </div>
+            <div id="plate-detail-content"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var searchTimeout = null;
+var currentPlates = [];
+
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(loadPlates, 300);
+}
+
+function loadSummary() {
+    fetch('/api/plates/summary')
+    .then(function(r) { return r.json(); })
+    .then(function(s) {
+        var container = document.getElementById('summary-cards');
+        if (!s || !s.totalReads) {
+            container.innerHTML = '';
+            return;
+        }
+        var cards = [
+            {label: 'PLATE READS', value: s.totalReads, color: '#2F5D78'},
+            {label: 'UNIQUE PLATES', value: s.uniquePlates, color: '#F2A65A'},
+            {label: 'AVG CONFIDENCE', value: (s.avgConfidence * 100).toFixed(1) + '%', color: '#D9E2E8'},
+            {label: 'HIGH CONF', value: s.highConfidence, color: '#2F5D78'},
+            {label: 'VEHICLES WITH PLATES', value: s.vehiclesWithPlates ? s.vehiclesWithPlates.length : 0, color: '#C99A6B'},
+        ];
+        container.innerHTML = cards.map(function(c) {
+            return '<div class="panel p-4" style="text-align: center;">' +
+                '<p style="font-size: 0.65rem; font-family: \'IBM Plex Mono\', monospace; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">' + c.label + '</p>' +
+                '<p style="font-size: 1.5rem; font-weight: 700; color: ' + c.color + '; margin-top: 4px;">' + c.value + '</p>' +
+                '</div>';
+        }).join('');
+    })
+    .catch(function() {
+        document.getElementById('summary-cards').innerHTML = '';
+    });
+}
+
+function loadPlates() {
+    var search = document.getElementById('search-input').value;
+    var conf = document.getElementById('confidence-filter').value;
+    var url = '/api/plates?confidence=' + conf;
+    if (search) url += '&search=' + encodeURIComponent(search);
+
+    fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(plates) {
+        currentPlates = plates;
+        renderPlates(plates);
+    })
+    .catch(function() {
+        document.getElementById('plates-table-container').innerHTML =
+            '<p style="text-align: center; color: var(--muted-foreground); padding: 40px;">Failed to load plates.</p>';
+    });
+}
+
+function renderPlates(plates) {
+    var container = document.getElementById('plates-table-container');
+    if (!plates || !plates.length) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px;">' +
+            '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="1.5" style="opacity: 0.3; margin-bottom: 12px;"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>' +
+            '<p style="color: var(--muted-foreground);">No plates detected yet.</p>' +
+            '<p style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 4px;">Process a video from Upload to detect license plates.</p>' +
+            '</div>';
+        return;
+    }
+
+    var html = '<div style="overflow-x: auto;">' +
+        '<table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">' +
+        '<thead><tr style="border-bottom: 1px solid var(--border);">' +
+        '<th style="text-align: left; padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Plate</th>' +
+        '<th style="text-align: left; padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Confidence</th>' +
+        '<th style="text-align: left; padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Track</th>' +
+        '<th style="text-align: left; padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Global ID</th>' +
+        '<th style="text-align: left; padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Vehicle</th>' +
+        '<th style="text-align: left; padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Frame</th>' +
+        '<th style="text-align: left; padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Video</th>' +
+        '<th style="text-align: left; padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.7rem; color: var(--muted-foreground); text-transform: uppercase;">Evidence</th>' +
+        '</tr></thead><tbody>';
+
+    plates.forEach(function(p) {
+        var confPct = (p.ocrConfidence * 100).toFixed(0);
+        var confColor = p.ocrConfidence >= 0.85 ? '#2F5D78' : p.ocrConfidence >= 0.6 ? '#C99A6B' : '#F2A65A';
+        var confLabel = p.ocrConfidence >= 0.85 ? 'HIGH' : p.ocrConfidence >= 0.6 ? 'MED' : 'LOW';
+
+        html += '<tr style="border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s;" ' +
+            'onclick="showPlateDetail(' + p.id + ')" ' +
+            'onmouseover="this.style.background=\'var(--surface)\'" onmouseout="this.style.background=\'\'">' +
+            '<td style="padding: 10px 8px;"><span style="font-family: \'IBM Plex Mono\', monospace; font-weight: 600; font-size: 0.9rem; color: var(--foreground);">' + (p.plateText || '-') + '</span></td>' +
+            '<td style="padding: 10px 8px;"><span style="display: inline-flex; align-items: center; gap: 6px;">' +
+            '<span style="font-family: \'IBM Plex Mono\', monospace; color: ' + confColor + '; font-weight: 500;">' + confPct + '%</span>' +
+            '<span style="font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; background: ' + confColor + '22; color: ' + confColor + ';">' + confLabel + '</span>' +
+            '</span></td>' +
+            '<td style="padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; color: var(--muted-foreground);">T' + (p.trackId || '-') + '</td>' +
+            '<td style="padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; color: #2F5D78;">' + (p.globalId || '-') + '</td>' +
+            '<td style="padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; color: var(--muted-foreground);">' + (p.vehicleClass || '-') + '</td>' +
+            '<td style="padding: 10px 8px; font-family: \'IBM Plex Mono\', monospace; color: var(--muted-foreground);">' + (p.frameIndex || '-') + '</td>' +
+            '<td style="padding: 10px 8px; font-size: 0.75rem; color: var(--muted-foreground); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + (p.videoFilename || '-') + '</td>' +
+            '<td style="padding: 10px 8px;">' +
+            (p.evidenceCrop ? '<span style="font-size: 0.7rem; color: #2F5D78; cursor: pointer;" onclick="event.stopPropagation(); window.open(\'' + p.evidenceCrop + '\', \'_blank\')">View</span>' : '<span style="font-size: 0.7rem; color: var(--muted-foreground);">-</span>') +
+            '</td>' +
+            '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+function showPlateDetail(plateId) {
+    var panel = document.getElementById('plate-detail-panel');
+    var content = document.getElementById('plate-detail-content');
+    panel.style.display = 'block';
+    content.innerHTML = '<p style="color: var(--muted-foreground);">Loading plate detail...</p>';
+    panel.scrollIntoView({ behavior: 'smooth' });
+
+    fetch('/api/plates/' + plateId)
+    .then(function(r) { return r.json(); })
+    .then(function(p) {
+        if (p.error) {
+            content.innerHTML = '<p style="color: var(--destructive);">Error: ' + p.error + '</p>';
+            return;
+        }
+        renderPlateDetail(p);
+    })
+    .catch(function(e) {
+        content.innerHTML = '<p style="color: var(--destructive);">Failed to load detail.</p>';
+    });
+}
+
+function renderPlateDetail(p) {
+    var content = document.getElementById('plate-detail-content');
+    var confPct = (p.ocrConfidence * 100).toFixed(1);
+    var confColor = p.ocrConfidence >= 0.85 ? '#2F5D78' : p.ocrConfidence >= 0.6 ? '#C99A6B' : '#F2A65A';
+
+    var ts = p.timestamp;
+    var mins = Math.floor(ts / 60);
+    var secs = (ts % 60).toFixed(1);
+    var timeStr = String(mins).padStart(2, '0') + ':' + String(secs).padStart(5, '0');
+
+    var html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">';
+
+    // Left column: info
+    html += '<div>';
+
+    // Plate badge
+    html += '<div style="background: var(--surface); border: 2px solid ' + confColor + '; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 16px;">' +
+        '<p style="font-family: \'IBM Plex Mono\', monospace; font-size: 1.8rem; font-weight: 700; color: var(--foreground);">' + (p.plateText || 'NOT READ') + '</p>' +
+        '<p style="font-size: 0.8rem; color: ' + confColor + '; margin-top: 4px;">OCR ' + confPct + '%</p>' +
+        '</div>';
+
+    // Info grid
+    html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">';
+    var fields = [
+        {label: 'PLATE TEXT', value: p.plateText || '-'},
+        {label: 'RAW OCR', value: p.rawText || '-'},
+        {label: 'OCR CONFIDENCE', value: confPct + '%', color: confColor},
+        {label: 'TRACK ID', value: 'T' + (p.trackId || '-')},
+        {label: 'GLOBAL VEHICLE ID', value: p.globalId || '-', color: '#2F5D78'},
+        {label: 'VEHICLE CLASS', value: p.vehicleClass || '-'},
+        {label: 'FRAME', value: p.frameIndex || '-'},
+        {label: 'TIMESTAMP', value: timeStr},
+        {label: 'VIDEO', value: p.videoFilename || '-'},
+        {label: 'TOTAL OBSERVATIONS', value: p.totalObservations || 0},
+    ];
+    fields.forEach(function(f) {
+        html += '<div style="background: var(--surface); border-radius: 6px; padding: 10px;">' +
+            '<p style="font-size: 0.6rem; font-family: \'IBM Plex Mono\', monospace; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.05em;">' + f.label + '</p>' +
+            '<p style="font-size: 0.85rem; font-family: \'IBM Plex Mono\', monospace; font-weight: 500; color: ' + (f.color || 'var(--foreground)') + '; margin-top: 2px; word-break: break-all;">' + f.value + '</p>' +
+            '</div>';
+    });
+    html += '</div>';
+
+    // Evidence images
+    html += '<div style="margin-top: 16px;">' +
+        '<p style="font-size: 0.75rem; font-family: \'IBM Plex Mono\', monospace; color: var(--muted-foreground); text-transform: uppercase; margin-bottom: 8px;">EVIDENCE</p>' +
+        '<div style="display: flex; gap: 12px; flex-wrap: wrap;">';
+
+    if (p.evidenceCrop) {
+        html += '<div style="background: var(--surface); border-radius: 6px; padding: 8px; text-align: center; flex: 1; min-width: 200px;">' +
+            '<p style="font-size: 0.65rem; color: var(--muted-foreground); margin-bottom: 6px;">PLATE CROP</p>' +
+            '<img src="' + p.evidenceCrop + '" style="max-width: 100%; max-height: 120px; border-radius: 4px; cursor: pointer;" onclick="window.open(\'' + p.evidenceCrop + '\', \'_blank\')" title="Click to enlarge">' +
+            '</div>';
+    }
+    if (p.evidenceFrame) {
+        html += '<div style="background: var(--surface); border-radius: 6px; padding: 8px; text-align: center; flex: 1; min-width: 200px;">' +
+            '<p style="font-size: 0.65rem; color: var(--muted-foreground); margin-bottom: 6px;">VEHICLE FRAME</p>' +
+            '<img src="' + p.evidenceFrame + '" style="max-width: 100%; max-height: 120px; border-radius: 4px; cursor: pointer;" onclick="window.open(\'' + p.evidenceFrame + '\', \'_blank\')" title="Click to enlarge">' +
+            '</div>';
+    }
+    if (!p.evidenceCrop && !p.evidenceFrame) {
+        html += '<p style="font-size: 0.75rem; color: var(--muted-foreground);">No evidence images available.</p>';
+    }
+    html += '</div></div>';
+
+    html += '</div>';
+
+    // Right column: OCR history
+    html += '<div>';
+    html += '<p style="font-size: 0.75rem; font-family: \'IBM Plex Mono\', monospace; color: var(--muted-foreground); text-transform: uppercase; margin-bottom: 8px;">OCR OBSERVATION HISTORY</p>';
+
+    if (p.observations && p.observations.length > 0) {
+        html += '<div style="max-height: 400px; overflow-y: auto;">';
+        p.observations.forEach(function(obs, i) {
+            var oConf = (obs.ocrConfidence * 100).toFixed(0);
+            var oColor = obs.ocrConfidence >= 0.85 ? '#2F5D78' : obs.ocrConfidence >= 0.6 ? '#C99A6B' : '#F2A65A';
+            var isBest = i === 0;
+            html += '<div style="display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border); ' + (isBest ? 'background: ' + oColor + '11;' : '') + '">' +
+                '<span style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; color: var(--muted-foreground); width: 50px;">F' + obs.frameIndex + '</span>' +
+                '<span style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.8rem; font-weight: 600; flex: 1;">' + obs.plateText + '</span>' +
+                '<span style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; color: ' + oColor + ';">' + oConf + '%</span>' +
+                (isBest ? '<span style="font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; background: ' + oColor + '; color: white;">BEST</span>' : '') +
+                '</div>';
+        });
+        html += '</div>';
+    } else {
+        html += '<p style="font-size: 0.75rem; color: var(--muted-foreground);">No observation history available.</p>';
+    }
+
+    html += '</div></div>';
+
+    // Action buttons
+    html += '<div style="margin-top: 16px; display: flex; gap: 8px;">';
+    if (p.globalId) {
+        html += '<a href="/tracking?search=' + encodeURIComponent(p.globalId) + '" class="btn btn-primary btn-sm">View Vehicle Track</a>';
+    }
+    html += '<a href="/trajectory?search=' + encodeURIComponent(p.globalId || '') + '" class="btn btn-secondary btn-sm">View Trajectory</a>';
+    html += '</div>';
+
+    content.innerHTML = html;
+}
+
+function closeDetail() {
+    document.getElementById('plate-detail-panel').style.display = 'none';
+}
+
+loadSummary();
+loadPlates();
+setInterval(function() { loadSummary(); loadPlates(); }, 10000);
+</script>
+{% endblock %}

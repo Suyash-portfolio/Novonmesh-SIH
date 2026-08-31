@@ -1,0 +1,52 @@
+{
+  "cameras": [
+    {
+      "id": "CAM-01",
+      "name": "Main Gate Road",
+      "nodeId": "N02",
+      "x": 400, "y": 100,
+      "description": "Main entrance monitoring",
+      "zone": "A"
+    },
+    {
+      "id": "CAM-02",
+      "name": "Central Junction",
+      "nodeId": "N19",
+      "x": 950, "y": 500,
+      "description": "City center intersection",
+      "zone": "B"
+    },
+    {
+      "id": "CAM-03",
+      "name": "Ring Road East",
+      "nodeId": "N21",
+      "x": 1350, "y": 550,
+      "description": "Eastern ring road flyover",
+      "zone": "C"
+    },
+    {
+      "id": "CAM-04",
+      "name": "Market Corridor",
+      "nodeId": "N18",
+      "x": 750, "y": 520,
+      "description": "Market area monitoring",
+      "zone": "B"
+    },
+    {
+      "id": "CAM-05",
+      "name": "Highway Entry",
+      "nodeId": "N34",
+      "x": 700, "y": 1060,
+      "description": "South highway on-ramp",
+      "zone": "D"
+    },
+    {
+      "id": "CAM-06",
+      "name": "Exit Corridor",
+      "nodeId": "N05",
+      "x": 1300, "y": 100,
+      "description": "North-east exit monitoring",
+      "zone": "A"
+    }
+  ]
+}

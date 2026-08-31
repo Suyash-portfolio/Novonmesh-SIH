@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% block title %}Traffic Analytics{% endblock %}
+{% block content %}
+<div>
+    <div class="page-header">
+        <p class="mono-label">Processing Analytics</p>
+        <h1>Traffic Analytics</h1>
+        <p>Analytics derived from actual vehicle detections across all processed video sources.</p>
+    </div>
+
+    <div id="analytics-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+        <div class="kpi-card"><div class="kpi-label">Traffic Density</div><div class="kpi-value" id="an-density">N/A</div></div>
+        <div class="kpi-card"><div class="kpi-label">Total Detections</div><div class="kpi-value" id="an-detections">N/A</div></div>
+        <div class="kpi-card"><div class="kpi-label">Unique Vehicles</div><div class="kpi-value" id="an-vehicles">N/A</div></div>
+        <div class="kpi-card"><div class="kpi-label">Video Sources</div><div class="kpi-value" id="an-sources">N/A</div></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+        <div class="kpi-card">
+            <div class="kpi-label">Avg Speed</div>
+            <div class="kpi-value" id="an-speed">N/A</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Congestion Level</div>
+            <div class="kpi-value" id="an-congestion">N/A</div>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px;">
+        <div class="panel p-5">
+            <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 16px;">Detections Over Time</h2>
+            <div style="height: 288px;"><canvas id="hourly-chart"></canvas></div>
+        </div>
+        <div class="panel p-5">
+            <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 16px;">Vehicle Type Distribution</h2>
+            <div style="height: 224px;"><canvas id="mix-chart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="panel p-5" style="margin-bottom: 24px;">
+        <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 16px;">Origin-Destination Flow</h2>
+        <div id="od-container"></div>
+    </div>
+
+    <div class="panel p-5" style="margin-bottom: 24px;">
+        <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 16px;">Camera Traffic Flow</h2>
+        <div id="camera-flow-container"></div>
+    </div>
+
+    <div class="panel p-5" style="margin-bottom: 24px;">
+        <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 16px;">Detection Heatmap</h2>
+        <div id="heatmap-container" style="margin-top: 12px;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let hourlyChart, mixChart;
+
+async function loadAnalytics() {
+    try {
+        const data = await API.get('/api/analytics/stats');
+
+        document.getElementById('an-density').textContent = (data.trafficDensity || 0) + '%';
+        document.getElementById('an-detections').textContent = (data.todayDetections || 0).toLocaleString();
+        document.getElementById('an-vehicles').textContent = (data.totalVehicles || 0).toLocaleString();
+        document.getElementById('an-sources').textContent = (data.totalCameras || 0);
+        document.getElementById('an-speed').textContent = (data.avgSpeed || 0) + ' km/h';
+        document.getElementById('an-congestion').textContent = data.congestion || 'LOW';
+
+        renderHourlyChart(data.hourlyTraffic || []);
+        renderMixChart(data.vehicleMix || []);
+        renderHeatmap(data.heatmap || [], data.heatmapBuckets || []);
+        renderODMatrix(data.routeFrequency || []);
+        renderCameraFlow(data.cameraFlow || []);
+    } catch (e) {
+        console.warn('Analytics load failed:', e);
+    }
+}
+
+function renderHourlyChart(data) {
+    const ctx = document.getElementById('hourly-chart');
+    if (!ctx) return;
+    if (hourlyChart) hourlyChart.destroy();
+
+    hourlyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => d.hour),
+            datasets: [{
+                label: 'Detections',
+                data: data.map(d => d.vehicles),
+                borderColor: '#2F5D78',
+                backgroundColor: 'rgba(47,93,120,0.15)',
+                fill: true, tension: 0.4, pointRadius: 3
+            }, {
+                label: 'Density %',
+                data: data.map(d => d.density),
+                borderColor: '#F2A65A',
+                backgroundColor: 'rgba(242,166,90,0.10)',
+                fill: true, tension: 0.4, pointRadius: 3
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#C99A6B', font: { family: "'IBM Plex Mono'" } } } },
+            scales: {
+                x: { ticks: { color: '#C99A6B', font: { family: "'IBM Plex Mono'", size: 10 } }, grid: { color: 'rgba(61,79,73,0.5)' } },
+                y: { ticks: { color: '#C99A6B', font: { family: "'IBM Plex Mono'", size: 10 } }, grid: { color: 'rgba(61,79,73,0.5)' } }
+            }
+        }
+    });
+}
+
+function renderMixChart(data) {
+    const ctx = document.getElementById('mix-chart');
+    if (!ctx) return;
+    if (mixChart) mixChart.destroy();
+
+    mixChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => d.name),
+            datasets: [{
+                data: data.map(d => d.value),
+                backgroundColor: ['#2F5D78', '#F2A65A', '#C99A6B', '#D9E2E8', '#E34B4B'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, cutout: '55%',
+            plugins: { legend: { position: 'bottom', labels: { color: '#C99A6B', font: { family: "'IBM Plex Mono'", size: 10 }, padding: 12 } } }
+        }
+    });
+}
+
+function renderHeatmap(heatmap, buckets) {
+    const container = document.getElementById('heatmap-container');
+    if (!container) return;
+    if (!heatmap.length || !buckets.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No heatmap data yet. Process a video to see results.</p>';
+        return;
+    }
+
+    const heatColor = (v) => {
+        if (v >= 85) return 'rgba(192,57,43,0.8)';
+        if (v >= 65) return 'rgba(242,166,90,0.8)';
+        if (v >= 45) return 'rgba(201,154,107,0.55)';
+        if (v >= 25) return 'rgba(47,93,120,0.45)';
+        return 'rgba(47,93,120,0.20)';
+    };
+
+    let html = '<div style="display: grid; grid-template-columns: auto repeat(' + buckets.length + ', 1fr); gap: 2px; align-items: center;">';
+    html += '<div></div>';
+    buckets.forEach(b => { html += '<div class="heatmap-header">' + b + '</div>'; });
+
+    heatmap.forEach(row => {
+        html += '<div class="heatmap-label">' + row.camera + '</div>';
+        row.values.forEach(v => {
+            html += '<div class="heatmap-cell" style="background: ' + heatColor(v) + '; color: #fff;">' + v + '</div>';
+        });
+    });
+    html += '</div>';
+
+    html += '<div style="display: flex; gap: 8px; margin-top: 12px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.625rem; color: var(--muted-foreground); align-items: center;">';
+    html += '<span>Low</span>';
+    [20, 45, 65, 85, 95].forEach(v => {
+        html += '<span style="width: 20px; height: 12px; background: ' + heatColor(v) + '; border-radius: 2px;"></span>';
+    });
+    html += '<span>High</span></div>';
+
+    container.innerHTML = html;
+}
+
+function renderODMatrix(routes) {
+    const container = document.getElementById('od-container');
+    if (!container) return;
+    if (!routes.length || (routes.length === 1 && routes[0].trips === 0)) {
+        container.innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No multi-camera transitions yet. Process multiple videos to see OD flow.</p>';
+        return;
+    }
+
+    var html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+    routes.forEach(function(r) {
+        var pct = routes[0].trips > 0 ? Math.round(r.trips / routes[0].trips * 100) : 0;
+        html += '<div style="display: flex; align-items: center; gap: 12px;">' +
+            '<span style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.875rem; font-weight: 600; color: #D9E2E8; min-width: 200px;">' + r.route + '</span>' +
+            '<div style="flex: 1; height: 8px; background: var(--muted); border-radius: 4px; overflow: hidden;">' +
+            '<div style="width: ' + pct + '%; height: 100%; background: #2F5D78; border-radius: 4px;"></div>' +
+            '</div>' +
+            '<span style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; color: #C99A6B; min-width: 40px;">' + r.trips + '</span>' +
+            '</div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderCameraFlow(flows) {
+    const container = document.getElementById('camera-flow-container');
+    if (!container) return;
+    if (!flows.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No camera flow data yet.</p>';
+        return;
+    }
+
+    var html = '<table class="data-table"><thead><tr><th>Camera</th><th>Detections</th><th>Flow In</th><th>Flow Out</th><th>Activity</th></tr></thead><tbody>';
+    flows.forEach(function(f) {
+        var activity = f.detections + f.flow_in + f.flow_out;
+        var barPct = Math.min(100, activity);
+        html += '<tr>' +
+            '<td class="font-semibold" style="color: #2F5D78;">' + f.camera + '</td>' +
+            '<td>' + f.detections + '</td>' +
+            '<td style="color: #C99A6B;">' + f.flow_in + '</td>' +
+            '<td style="color: #F2A65A;">' + f.flow_out + '</td>' +
+            '<td><div style="width: 100px; height: 6px; background: var(--muted); border-radius: 3px; overflow: hidden;">' +
+            '<div style="width: ' + barPct + '%; height: 100%; background: #2F5D78; border-radius: 3px;"></div></div></td>' +
+            '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+loadAnalytics();
+</script>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Tracking{% endblock %}
+{% block content %}
+<div>
+    <div class="page-header">
+        <p class="mono-label">Vehicle Re-Identification</p>
+        <h1>Vehicle Tracking</h1>
+        <p>Enter a license plate or Global Vehicle ID (GV-XXXXXX) to track a vehicle across the video analysis.</p>
+    </div>
+
+    <div class="search-bar">
+        <input type="text" class="form-input" id="plate-search" placeholder="e.g. AB123CD or GV-000017" onkeypress="if(event.key==='Enter')searchVehicle()">
+        <button class="btn btn-primary" onclick="searchVehicle()">Track Vehicle</button>
+    </div>
+
+    <div id="tracking-result"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function searchVehicle() {
+    const q = document.getElementById('plate-search').value.trim();
+    if (!q) return;
+
+    const resultEl = document.getElementById('tracking-result');
+    resultEl.innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 40px;">Searching...</p>';
+
+    try {
+        const vehicle = await API.get('/api/vehicles/search?q=' + encodeURIComponent(q));
+        renderVehicle(vehicle);
+    } catch (e) {
+        resultEl.innerHTML =
+            '<div class="panel" style="text-align: center; padding: 48px;">' +
+            '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="2" style="margin-bottom: 12px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>' +
+            '<p style="color: var(--muted-foreground);">No detections found for "' + q + '"</p>' +
+            '</div>';
+    }
+}
+
+function renderVehicle(v) {
+    const el = document.getElementById('tracking-result');
+    const watchlistClass = v.watchlist === 'blacklisted' ? 'badge-critical' : v.watchlist === 'flagged' ? 'badge-warning' : 'badge-success';
+
+    var trailHtml = '';
+    if (v.trail && v.trail.length) {
+        trailHtml = v.trail.map(function(t, i) {
+            return '<div class="trail-step" style="animation-delay: ' + (i * 0.2) + 's">' +
+                '<div class="trail-connector"></div>' +
+                '<div class="trail-dot">' + (i + 1) + '</div>' +
+                '<div class="trail-content">' +
+                '<div class="trail-camera">Frame ' + (t.frameIndex || '-') + ' <span style="font-weight: 400; color: var(--foreground);">· ' + (t.cameraName || '') + '</span></div>' +
+                '<div class="trail-details">' + (t.cameraZone || '') + '</div>' +
+                '<div class="trail-meta">' +
+                '<span>' + t.time + '</span>' +
+                '<span>' + t.direction + '</span>' +
+                '<span>' + t.speed + ' km/h</span>' +
+                '<span>' + (t.ocrConfidence || 0) + '% OCR</span>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+        }).join('');
+    }
+
+    var dlItems = [
+        ['Type', v.type], ['Make / Model', v.make], ['Colour', v.color],
+        ['OCR Confidence', v.ocrConfidence + '%'], ['First Seen', v.firstSeen],
+        ['Last Seen', v.lastSeen], ['Detections', (v.trail || []).length + ' frames']
+    ].map(function(pair) {
+        return '<div style="border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 12px;">' +
+            '<dt class="mono-label">' + pair[0] + '</dt>' +
+            '<dd style="margin-top: 4px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.875rem;">' + pair[1] + '</dd>' +
+            '</div>';
+    }).join('');
+
+    var historyRows = (v.trail || []).map(function(t, i) {
+        var posStr = (t.centerX !== null && t.centerX !== undefined) ? 'x:' + Math.round(t.centerX) + ' y:' + Math.round(t.centerY) : '-';
+        return '<tr>' +
+            '<td class="text-muted">' + (i + 1) + '</td>' +
+            '<td class="font-semibold text-primary">' + (t.frameIndex || '-') + '</td>' +
+            '<td>' + (t.cameraName || 'N/A') + '</td>' +
+            '<td>' + t.time + '</td>' +
+            '<td class="text-muted">' + t.direction + '</td>' +
+            '<td>' + t.speed + ' km/h</td>' +
+            '<td class="text-muted">' + posStr + '</td>' +
+            '<td class="text-success">' + (t.ocrConfidence || 0) + '%</td>' +
+            '</tr>';
+    }).join('');
+
+    el.innerHTML =
+        '<section style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px;">' +
+        '<div class="panel p-5">' +
+        '<div style="display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 16px;">' +
+        '<div>' +
+        '<p class="mono-label">Matched Vehicle</p>' +
+        '<p style="margin-top: 4px; font-family: \'IBM Plex Mono\', monospace; font-size: 1.25rem; font-weight: 700; letter-spacing: 0.1em;">' + v.globalId + '</p>' +
+        '<p style="margin-top: 2px; font-family: \'IBM Plex Mono\', monospace; font-size: 0.875rem; color: var(--muted-foreground);">Plate: ' + (v.plate !== 'UNKNOWN' ? v.plate : 'Not read') + '</p>' +
+        '</div>' +
+        '<span class="badge ' + watchlistClass + '">' + v.watchlist + '</span>' +
+        '</div>' +
+        '<dl style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px;">' +
+        dlItems +
+        '</dl>' +
+        '</div>' +
+        '<div style="display: flex; flex-direction: column; gap: 16px;">' +
+        '<div class="panel p-5">' +
+        '<p class="mono-label">Journey Duration</p>' +
+        '<p style="margin-top: 8px; font-size: 1.5rem; font-weight: 700;">' + v.journeyDuration + '</p>' +
+        '</div>' +
+        '<div class="panel p-5">' +
+        '<p class="mono-label">Average Speed</p>' +
+        '<p style="margin-top: 8px; font-size: 1.5rem; font-weight: 700;">' + v.avgSpeed + ' km/h</p>' +
+        '</div>' +
+        '<div class="panel p-5">' +
+        '<p class="mono-label">Distance Covered</p>' +
+        '<p style="margin-top: 8px; font-size: 1.5rem; font-weight: 700;">' + v.totalDistance + ' km</p>' +
+        '</div>' +
+        '<a href="/trajectory?q=' + encodeURIComponent(v.globalId) + '" class="btn btn-primary btn-full" style="padding: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">' +
+        'View trajectory' +
+        '</a>' +
+        '</div>' +
+        '</section>' +
+        '<section style="margin-bottom: 24px;">' +
+        '<h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 12px;">Detection Sequence</h2>' +
+        '<div class="panel p-5">' + (trailHtml || '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No trail data available</p>') + '</div>' +
+        '</section>' +
+        '<section class="panel p-5">' +
+        '<h2 style="font-size: 1rem; font-weight: 600;">Frame History</h2>' +
+        '<div style="overflow-x: auto; margin-top: 16px;">' +
+        '<table class="data-table">' +
+        '<thead><tr><th>#</th><th>Frame</th><th>Source</th><th>Timestamp</th><th>Direction</th><th>Speed</th><th>Position</th><th>OCR</th></tr></thead>' +
+        '<tbody>' + (historyRows || '<tr><td colspan="8" style="text-align: center; color: var(--muted-foreground);">No history</td></tr>') + '</tbody>' +
+        '</table>' +
+        '</div>' +
+        '</section>';
+}
+
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var q = params.get('q') || params.get('plate');
+    if (q) {
+        document.getElementById('plate-search').value = q;
+        searchVehicle();
+    }
+})();
+</script>
+{% endblock %}

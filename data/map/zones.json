@@ -1,0 +1,32 @@
+{
+  "zones": [
+    {
+      "id": "ZONE-A",
+      "name": "North Sector",
+      "color": "#2F5D78",
+      "opacity": 0.08,
+      "bounds": {"x1":0,"y1":0,"x2":900,"y2":500}
+    },
+    {
+      "id": "ZONE-B",
+      "name": "Central Core",
+      "color": "#C99A6B",
+      "opacity": 0.08,
+      "bounds": {"x1":400,"y1":250,"x2":1100,"y2":750}
+    },
+    {
+      "id": "ZONE-C",
+      "name": "East District",
+      "color": "#F2A65A",
+      "opacity": 0.08,
+      "bounds": {"x1":1100,"y1":0,"x2":2000,"y2":700}
+    },
+    {
+      "id": "ZONE-D",
+      "name": "South Sector",
+      "color": "#2F5D78",
+      "opacity": 0.08,
+      "bounds": {"x1":0,"y1":700,"x2":2000,"y2":1200}
+    }
+  ]
+}

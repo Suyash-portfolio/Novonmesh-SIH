@@ -1,0 +1,54 @@
+{
+  "nodes": [
+    {"id":"N01","x":100,"y":100,"label":"NW Corner"},
+    {"id":"N02","x":400,"y":100,"label":"North Gate"},
+    {"id":"N03","x":700,"y":100,"label":"North Junction"},
+    {"id":"N04","x":1000,"y":80,"label":"NE Junction"},
+    {"id":"N05","x":1300,"y":100,"label":"East Gate"},
+    {"id":"N06","x":1600,"y":100,"label":"NE Corner"},
+    {"id":"N07","x":1850,"y":200,"label":"East Wing"},
+
+    {"id":"N08","x":100,"y":350,"label":"West Entry"},
+    {"id":"N09","x":350,"y":350,"label":"NW Block"},
+    {"id":"N10","x":600,"y":320,"label":"NW Bridge"},
+    {"id":"N11","x":850,"y":300,"label":"Central North"},
+    {"id":"N12","x":1100,"y":300,"label":"NE Block"},
+    {"id":"N13","x":1400,"y":340,"label":"East Corridor"},
+    {"id":"N14","x":1700,"y":350,"label":"East Service"},
+
+    {"id":"N15","x":100,"y":600,"label":"W Corridor"},
+    {"id":"N16","x":350,"y":580,"label":"W Market"},
+    {"id":"N17","x":550,"y":550,"label":"NW Flyover"},
+    {"id":"N18","x":750,"y":520,"label":"Central W"},
+    {"id":"N19","x":950,"y":500,"label":"City Center"},
+    {"id":"N20","x":1150,"y":520,"label":"Central E"},
+    {"id":"N21","x":1350,"y":550,"label":"SE Flyover"},
+    {"id":"N22","x":1600,"y":580,"label":"E Market"},
+    {"id":"N23","x":1850,"y":600,"label":"E Corridor"},
+
+    {"id":"N24","x":100,"y":850,"label":"SW Corner"},
+    {"id":"N25","x":350,"y":830,"label":"South Entry"},
+    {"id":"N26","x":600,"y":800,"label":"S Bridge"},
+    {"id":"N27","x":850,"y":780,"label":"Central South"},
+    {"id":"N28","x":1100,"y":780,"label":"SE Block"},
+    {"id":"N29","x":1400,"y":800,"label":"S Corridor"},
+    {"id":"N30","x":1700,"y":830,"label":"SE Service"},
+    {"id":"N31","x":1850,"y":850,"label":"SE Corner"},
+
+    {"id":"N32","x":100,"y":1100,"label":"SW Lower"},
+    {"id":"N33","x":400,"y":1080,"label":"South Gate"},
+    {"id":"N34","x":700,"y":1060,"label":"S Junction"},
+    {"id":"N35","x":1000,"y":1080,"label":"SE Junction"},
+    {"id":"N36","x":1300,"y":1100,"label":"S East"},
+    {"id":"N37","x":1600,"y":1100,"label":"SE Exit"},
+    {"id":"N38","x":1850,"y":1080,"label":"SE Lower"},
+
+    {"id":"N39","x":500,"y":500,"label":"Roundabout W"},
+    {"id":"N40","x":500,"y":440,"label":"Roundabout NW"},
+    {"id":"N41","x":560,"y":410,"label":"Roundabout N"},
+    {"id":"N42","x":620,"y":440,"label":"Roundabout NE"},
+    {"id":"N43","x":620,"y":510,"label":"Roundabout E"},
+    {"id":"N44","x":560,"y":540,"label":"Roundabout SE"},
+    {"id":"N45","x":500,"y":510,"label":"Roundabout S"}
+  ]
+}

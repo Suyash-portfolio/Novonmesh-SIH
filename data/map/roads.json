@@ -1,0 +1,89 @@
+{
+  "roads": [
+    {"id":"R01","from":"N01","to":"N02","name":"Ring Road North","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R02","from":"N02","to":"N03","name":"Ring Road North","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R03","from":"N03","to":"N04","name":"Ring Road North","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R04","from":"N04","to":"N05","name":"Ring Road North","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R05","from":"N05","to":"N06","name":"Ring Road North","type":"main","width":4,"direction":"both","speedLimit":60},
+
+    {"id":"R06","from":"N06","to":"N07","name":"East Connector","type":"secondary","width":3,"direction":"both","speedLimit":40},
+
+    {"id":"R07","from":"N01","to":"N08","name":"Ring Road West","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R08","from":"N08","to":"N15","name":"Ring Road West","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R09","from":"N15","to":"N24","name":"Ring Road West","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R10","from":"N24","to":"N32","name":"Ring Road West","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R11","from":"N32","to":"N24","name":"Ring Road SW","type":"main","width":4,"direction":"both","speedLimit":60},
+
+    {"id":"R12","from":"N07","to":"N14","name":"East Connector","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R13","from":"N14","to":"N23","name":"East Connector","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R14","from":"N23","to":"N31","name":"East Connector","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R15","from":"N31","to":"N38","name":"East Connector","type":"secondary","width":3,"direction":"both","speedLimit":40},
+
+    {"id":"R16","from":"N32","to":"N33","name":"Ring Road South","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R17","from":"N33","to":"N34","name":"Ring Road South","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R18","from":"N34","to":"N35","name":"Ring Road South","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R19","from":"N35","to":"N36","name":"Ring Road South","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R20","from":"N36","to":"N37","name":"Ring Road South","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R21","from":"N37","to":"N38","name":"Ring Road South","type":"main","width":4,"direction":"both","speedLimit":60},
+
+    {"id":"R22","from":"N02","to":"N09","name":"North Avenue","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R23","from":"N09","to":"N16","name":"North Avenue","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R24","from":"N16","to":"N25","name":"North Avenue","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R25","from":"N25","to":"N33","name":"North Avenue","type":"secondary","width":3,"direction":"both","speedLimit":40},
+
+    {"id":"R26","from":"N03","to":"N10","name":"Central Avenue","type":"main","width":5,"direction":"both","speedLimit":50},
+    {"id":"R27","from":"N10","to":"N17","name":"Central Avenue","type":"main","width":5,"direction":"both","speedLimit":50},
+    {"id":"R28","from":"N17","to":"N18","name":"Central Avenue","type":"main","width":5,"direction":"both","speedLimit":50},
+    {"id":"R29","from":"N18","to":"N19","name":"Central Avenue","type":"main","width":5,"direction":"both","speedLimit":50},
+    {"id":"R30","from":"N19","to":"N20","name":"Central Avenue","type":"main","width":5,"direction":"both","speedLimit":50},
+    {"id":"R31","from":"N20","to":"N21","name":"Central Avenue","type":"main","width":5,"direction":"both","speedLimit":50},
+    {"id":"R32","from":"N21","to":"N29","name":"Central Avenue","type":"main","width":5,"direction":"both","speedLimit":50},
+    {"id":"R33","from":"N29","to":"N36","name":"Central Avenue","type":"main","width":5,"direction":"both","speedLimit":50},
+
+    {"id":"R34","from":"N04","to":"N11","name":"Market Road","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R35","from":"N11","to":"N18","name":"Market Road","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R36","from":"N18","to":"N27","name":"Market Road","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R37","from":"N27","to":"N34","name":"Market Road","type":"secondary","width":3,"direction":"both","speedLimit":40},
+
+    {"id":"R38","from":"N05","to":"N12","name":"Airport Corridor","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R39","from":"N12","to":"N20","name":"Airport Corridor","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R40","from":"N20","to":"N28","name":"Airport Corridor","type":"main","width":4,"direction":"both","speedLimit":60},
+    {"id":"R41","from":"N28","to":"N35","name":"Airport Corridor","type":"main","width":4,"direction":"both","speedLimit":60},
+
+    {"id":"R42","from":"N09","to":"N10","name":"Service Road A","type":"service","width":2,"direction":"both","speedLimit":30},
+    {"id":"R43","from":"N11","to":"N12","name":"Service Road B","type":"service","width":2,"direction":"both","speedLimit":30},
+    {"id":"R44","from":"N16","to":"N17","name":"Service Road C","type":"service","width":2,"direction":"both","speedLimit":30},
+    {"id":"R45","from":"N25","to":"N26","name":"Service Road D","type":"service","width":2,"direction":"both","speedLimit":30},
+    {"id":"R46","from":"N26","to":"N27","name":"Service Road E","type":"service","width":2,"direction":"both","speedLimit":30},
+
+    {"id":"R47","from":"N08","to":"N09","name":"West Avenue","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R48","from":"N15","to":"N16","name":"West Avenue","type":"secondary","width":3,"direction":"both","speedLimit":40},
+
+    {"id":"R49","from":"N24","to":"N25","name":"South Avenue","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R50","from":"N32","to":"N33","name":"South Avenue","type":"secondary","width":3,"direction":"both","speedLimit":40},
+
+    {"id":"R51","from":"N13","to":"N21","name":"East Service","type":"service","width":2,"direction":"both","speedLimit":30},
+    {"id":"R52","from":"N22","to":"N29","name":"East Service","type":"service","width":2,"direction":"both","speedLimit":30},
+    {"id":"R53","from":"N30","to":"N37","name":"East Service","type":"service","width":2,"direction":"both","speedLimit":30},
+
+    {"id":"R54","from":"N19","to":"N27","name":"Central Link","type":"service","width":2,"direction":"both","speedLimit":30},
+
+    {"id":"R55","from":"N10","to":"N11","name":"Flyover North","type":"flyover","width":3,"direction":"one_way","speedLimit":50},
+    {"id":"R56","from":"N21","to":"N28","name":"Flyover South","type":"flyover","width":3,"direction":"one_way","speedLimit":50},
+
+    {"id":"R57","from":"N13","to":"N22","name":"Bridge East","type":"bridge","width":3,"direction":"both","speedLimit":40},
+    {"id":"R58","from":"N26","to":"N34","name":"Bridge South","type":"bridge","width":3,"direction":"both","speedLimit":40},
+
+    {"id":"R59","from":"N30","to":"N22","name":"SE Connector","type":"secondary","width":3,"direction":"both","speedLimit":40},
+    {"id":"R60","from":"N39","to":"N40","name":"Roundabout","type":"main","width":3,"direction":"one_way","speedLimit":30},
+    {"id":"R61","from":"N40","to":"N41","name":"Roundabout","type":"main","width":3,"direction":"one_way","speedLimit":30},
+    {"id":"R62","from":"N41","to":"N42","name":"Roundabout","type":"main","width":3,"direction":"one_way","speedLimit":30},
+    {"id":"R63","from":"N42","to":"N43","name":"Roundabout","type":"main","width":3,"direction":"one_way","speedLimit":30},
+    {"id":"R64","from":"N43","to":"N44","name":"Roundabout","type":"main","width":3,"direction":"one_way","speedLimit":30},
+    {"id":"R65","from":"N44","to":"N45","name":"Roundabout","type":"main","width":3,"direction":"one_way","speedLimit":30},
+    {"id":"R66","from":"N45","to":"N39","name":"Roundabout","type":"main","width":3,"direction":"one_way","speedLimit":30},
+
+    {"id":"R67","from":"N17","to":"N39","name":"Roundabout Access","type":"secondary","width":2,"direction":"both","speedLimit":30},
+    {"id":"R68","from":"N42","to":"N18","name":"Roundabout Access","type":"secondary","width":2,"direction":"both","speedLimit":30}
+  ]
+}

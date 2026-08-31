@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Blacklist{% endblock %}
+{% block content %}
+<div>
+    <div class="page-header">
+        <p class="mono-label">Watchlist Management</p>
+        <h1>Blacklist</h1>
+        <p>Manage blacklisted license plates. When a blacklisted plate is detected during video processing, the system generates an alert.</p>
+    </div>
+
+    <div class="panel p-5" style="margin-bottom: 24px;">
+        <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 16px;">Add to Blacklist</h2>
+        <div style="display: grid; grid-template-columns: 2fr 3fr auto auto; gap: 12px; align-items: end;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Plate Number</label>
+                <input type="text" class="form-input" id="bl-plate" placeholder="Enter plate text (e.g. AB123CD)" style="text-transform: uppercase;">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Reason</label>
+                <input type="text" class="form-input" id="bl-reason" placeholder="Stolen vehicle, expired permit...">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Severity</label>
+                <select class="form-input" id="bl-severity">
+                    <option value="critical">Critical</option>
+                    <option value="warning" selected>Warning</option>
+                    <option value="info">Info</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="addBlacklist()">Add to Blacklist</button>
+        </div>
+    </div>
+
+    <div class="panel p-5">
+        <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 16px;">Blacklist Entries</h2>
+        <div style="overflow-x: auto;">
+            <table class="data-table" id="blacklist-table">
+                <thead>
+                    <tr><th>Plate</th><th>Reason</th><th>Severity</th><th>Status</th><th>Added</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="blacklist-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadBlacklist() {
+    try {
+        const entries = await API.get('/api/blacklist');
+        renderBlacklist(entries);
+    } catch (e) {
+        document.getElementById('blacklist-body').innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted-foreground); padding: 24px;">No entries</td></tr>';
+    }
+}
+
+function renderBlacklist(entries) {
+    const tbody = document.getElementById('blacklist-body');
+    if (!entries.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--muted-foreground); padding: 24px;">No blacklist entries</td></tr>';
+        return;
+    }
+    tbody.innerHTML = entries.map(e => `
+        <tr>
+            <td class="font-semibold">${e.plateText}</td>
+            <td>${e.reason || '-'}</td>
+            <td><span class="badge badge-${e.severity}">${e.severity}</span></td>
+            <td><span class="badge badge-${e.isActive ? 'critical' : 'success'}">${e.isActive ? 'Active' : 'Inactive'}</span></td>
+            <td class="text-muted">${e.addedAt ? new Date(e.addedAt).toLocaleDateString() : 'N/A'}</td>
+            <td>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-secondary btn-sm" onclick="toggleBlacklist(${e.id}, ${!e.isActive})">${e.isActive ? 'Deactivate' : 'Activate'}</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteBlacklist(${e.id})">Delete</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function addBlacklist() {
+    const plate = document.getElementById('bl-plate').value.trim();
+    const reason = document.getElementById('bl-reason').value.trim();
+    const severity = document.getElementById('bl-severity').value;
+
+    if (!plate) { alert('Plate number is required'); return; }
+
+    try {
+        await API.post('/api/blacklist', { plateText: plate, reason, severity });
+        document.getElementById('bl-plate').value = '';
+        document.getElementById('bl-reason').value = '';
+        loadBlacklist();
+    } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function toggleBlacklist(id, isActive) {
+    try {
+        await API.put('/api/blacklist/' + id, { isActive });
+        loadBlacklist();
+    } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function deleteBlacklist(id) {
+    if (!confirm('Delete this blacklist entry?')) return;
+    try {
+        await API.del('/api/blacklist/' + id);
+        loadBlacklist();
+    } catch (e) { alert('Error: ' + e.message); }
+}
+
+loadBlacklist();
+</script>
+{% endblock %}

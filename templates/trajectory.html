@@ -1,0 +1,841 @@
+{% extends "base.html" %}
+{% block title %}City Trajectory Map{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+.page-content { padding: 0 !important; flex: 1 !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+.traj-layout { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: 1fr auto; gap: 0; flex: 1; min-height: 0; }
+.traj-sidebar { grid-row: 1 / 3; overflow-y: auto; border-right: 1px solid var(--border); background: var(--surface); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.traj-map-wrap { position: relative; overflow: hidden; min-height: 400px; height: 100%; }
+#city-map { width: 100%; height: 100%; min-height: 400px; background: #0B1220; }
+.traj-timeline { border-top: 1px solid var(--border); background: var(--surface); padding: 10px 14px; overflow-x: auto; white-space: nowrap; max-height: 80px; }
+.section-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.625rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted-foreground); margin-bottom: 6px; }
+.info-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(30,45,61,0.4); font-size: 0.75rem; }
+.info-row .label { color: var(--muted-foreground); }
+.info-row .value { font-family: 'IBM Plex Mono', monospace; font-weight: 600; color: var(--foreground); }
+.cam-chain { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; margin: 6px 0; }
+.cam-node { padding: 3px 8px; border-radius: 4px; background: rgba(47,93,120,0.2); border: 1px solid rgba(47,93,120,0.4); font-family: 'IBM Plex Mono', monospace; font-size: 0.625rem; font-weight: 600; color: #2F5D78; }
+.cam-arrow { color: var(--muted-foreground); font-size: 0.6875rem; }
+.cam-arrow .time { display: block; font-size: 0.5625rem; color: #C99A6B; }
+.timeline-point { display: inline-flex; flex-direction: column; align-items: center; padding: 4px 8px; margin: 0 2px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; min-width: 60px; }
+.timeline-point:hover, .timeline-point.active { background: rgba(47,93,120,0.15); border-color: rgba(47,93,120,0.4); }
+.timeline-point.active { border-color: #F2A65A; }
+.timeline-point .tp-cam { font-family: 'IBM Plex Mono', monospace; font-size: 0.5625rem; font-weight: 700; color: #2F5D78; }
+.timeline-point .tp-time { font-family: 'IBM Plex Mono', monospace; font-size: 0.625rem; color: var(--foreground); }
+.timeline-point .tp-dot { width: 6px; height: 6px; border-radius: 50%; background: #2F5D78; margin-top: 2px; }
+.timeline-point.active .tp-dot { background: #F2A65A; box-shadow: 0 0 6px rgba(242,166,90,0.5); }
+.replay-bar { display: flex; gap: 4px; align-items: center; }
+.replay-btn { padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); color: var(--foreground); cursor: pointer; font-size: 0.6875rem; }
+.replay-btn:hover { background: rgba(47,93,120,0.2); }
+.layer-toggle { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 0.75rem; cursor: pointer; }
+.layer-toggle input[type="checkbox"] { accent-color: #2F5D78; }
+.layer-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.legend-item { display: flex; align-items: center; gap: 5px; padding: 2px 0; font-size: 0.6875rem; color: var(--muted-foreground); }
+.legend-line { width: 16px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.evidence-thumb { width: 100%; max-width: 140px; border-radius: 4px; border: 1px solid var(--border); margin-top: 4px; cursor: pointer; }
+.tab-bar { display: flex; gap: 3px; }
+.tab-btn { padding: 5px 12px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--muted-foreground); cursor: pointer; font-size: 0.75rem; font-weight: 500; }
+.tab-btn.active { background: #2F5D78; color: #D9E2E8; border-color: #2F5D78; }
+.vehicle-list { max-height: 260px; overflow-y: auto; }
+.vehicle-item { padding: 6px 8px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; margin-bottom: 3px; transition: all 0.1s; }
+.vehicle-item:hover, .vehicle-item.active { background: rgba(47,93,120,0.12); border-color: rgba(47,93,120,0.3); }
+.vehicle-item.active { border-color: #F2A65A; }
+.vehicle-item .vi-id { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; font-weight: 700; }
+.vehicle-item .vi-plate { font-family: 'IBM Plex Mono', monospace; font-size: 0.6875rem; color: var(--foreground); }
+.vehicle-item .vi-cam { font-size: 0.625rem; color: var(--muted-foreground); }
+.vehicle-item .vi-badge { display: inline-block; padding: 1px 4px; border-radius: 3px; font-size: 0.5625rem; font-weight: 600; margin-left: 4px; }
+.mode-real { background: rgba(47,93,120,0.2); color: #2F5D78; }
+.mode-sim { background: rgba(242,166,90,0.2); color: #F2A65A; }
+.search-results { max-height: 180px; overflow-y: auto; }
+.search-result-item { padding: 6px 8px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; margin-bottom: 3px; }
+.search-result-item:hover { background: rgba(47,93,120,0.1); border-color: rgba(47,93,120,0.3); }
+.sr-plate { font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 0.8125rem; }
+.sr-meta { font-size: 0.625rem; color: var(--muted-foreground); }
+.sim-banner { padding: 4px 8px; border-radius: 4px; background: rgba(242,166,90,0.1); border: 1px solid rgba(242,166,90,0.3); font-size: 0.625rem; color: #F2A65A; margin-bottom: 6px; }
+.real-banner { padding: 4px 8px; border-radius: 4px; background: rgba(47,93,120,0.1); border: 1px solid rgba(47,93,120,0.3); font-size: 0.625rem; color: #2F5D78; margin-bottom: 6px; }
+.map-title-bar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000; background: rgba(11,18,32,0.92); border: 1px solid rgba(47,93,120,0.4); border-radius: 6px; padding: 6px 16px; display: flex; align-items: center; gap: 10px; pointer-events: none; }
+.map-title-bar h3 { font-family: 'IBM Plex Mono', monospace; font-size: 0.8125rem; font-weight: 700; color: #D9E2E8; margin: 0; }
+.map-title-bar .subtitle { font-family: 'IBM Plex Mono', monospace; font-size: 0.5625rem; color: #C99A6B; letter-spacing: 0.1em; text-transform: uppercase; }
+.map-badge { padding: 2px 6px; border-radius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 0.5rem; font-weight: 600; letter-spacing: 0.08em; }
+.badge-sim { background: rgba(242,166,90,0.15); color: #F2A65A; border: 1px solid rgba(242,166,90,0.3); }
+.badge-real { background: rgba(47,93,120,0.15); color: #2F5D78; border: 1px solid rgba(47,93,120,0.3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="traj-layout">
+    <div class="traj-sidebar">
+        <div class="section-title">CITY-WIDE TRAJECTORY</div>
+        <div class="search-group" style="display:flex;gap:6px;">
+            <input type="text" class="form-input" id="plate-search" placeholder="Plate or GV-ID" style="flex:1;font-size:0.8125rem;" onkeypress="if(event.key==='Enter')searchVehicle()">
+            <button class="btn btn-primary" onclick="searchVehicle()" style="white-space:nowrap;font-size:0.75rem;padding:8px 12px;">Search</button>
+        </div>
+        <div id="search-results" class="search-results"></div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="showAll()">ALL VEHICLES</button>
+            <button class="tab-btn" id="btn-selected" onclick="showSelected()" style="display:none;">SELECTED</button>
+        </div>
+        <div id="data-source-badge"></div>
+
+        <div id="info-panel">
+            <div style="padding:16px;text-align:center;color:var(--muted-foreground);">
+                <p style="font-size:0.875rem;font-weight:600;">Select a vehicle</p>
+                <p style="font-size:0.75rem;margin-top:4px;">Search or click from the list below</p>
+            </div>
+        </div>
+
+        <div class="section-title">Vehicles (<span id="vehicle-count">0</span>)</div>
+        <div id="vehicle-list" class="vehicle-list">
+            <div style="padding:8px;color:var(--muted-foreground);font-size:0.75rem;" id="vehicle-list-status">Loading vehicles...</div>
+        </div>
+
+        <div style="margin-top:auto;padding-top:8px;">
+            <div class="section-title">Map Layers</div>
+            <label class="layer-toggle"><input type="checkbox" id="layer-roads" checked onchange="toggleLayer('roads')"> <div class="layer-dot" style="background:#2F5D78;"></div> Road Network</label>
+            <label class="layer-toggle"><input type="checkbox" id="layer-cameras" checked onchange="toggleLayer('cameras')"> <div class="layer-dot" style="background:#C99A6B;"></div> Cameras</label>
+            <label class="layer-toggle"><input type="checkbox" id="layer-trajectories" checked onchange="toggleLayer('trajectories')"> <div class="layer-dot" style="background:#F2A65A;"></div> Trajectories</label>
+            <label class="layer-toggle"><input type="checkbox" id="layer-markers" checked onchange="toggleLayer('markers')"> <div class="layer-dot" style="background:#D9E2E8;"></div> Vehicle Markers</label>
+            <label class="layer-toggle"><input type="checkbox" id="layer-flow" checked onchange="toggleLayer('flow')"> <div class="layer-dot" style="background:rgba(47,93,120,0.6);"></div> Traffic Flow</label>
+            <label class="layer-toggle"><input type="checkbox" id="layer-congestion" checked onchange="toggleLayer('congestion')"> <div class="layer-dot" style="background:#E34B4B;"></div> Congestion</label>
+            <label class="layer-toggle"><input type="checkbox" id="layer-zones" checked onchange="toggleLayer('zones')"> <div class="layer-dot" style="background:rgba(201,154,107,0.3);"></div> Zones</label>
+
+            <div class="section-title" style="margin-top:8px;">Legend</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#C99A6B;"></div> Camera</div>
+            <div class="legend-item"><div class="legend-line" style="background:#2F5D78;"></div> Road (Main)</div>
+            <div class="legend-item"><div class="legend-line" style="background:#27465C;height:1px;"></div> Road (Secondary)</div>
+            <div class="legend-item"><div class="legend-line" style="background:#F2A65A;"></div> Trajectory</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#F2A65A;"></div> Vehicle</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#2F5D78;border:3px solid #F2A65A;"></div> Selected</div>
+            <div class="legend-item"><div class="legend-line" style="background:#E34B4B;height:3px;"></div> Severe</div>
+            <div class="legend-item"><div class="legend-line" style="background:#F2A65A;height:2px;"></div> Moderate</div>
+            <div class="legend-item"><div class="legend-line" style="background:rgba(47,93,120,0.3);height:1px;"></div> Low</div>
+        </div>
+    </div>
+
+    <div class="traj-map-wrap">
+        <div id="city-map"></div>
+        <div class="map-title-bar">
+            <h3>NAVONMESH CITY-WIDE TRAJECTORY</h3>
+            <span class="subtitle">VIRTUAL CITY ROAD NETWORK</span>
+            <span class="map-badge badge-sim" id="map-mode-badge">SIMULATION</span>
+        </div>
+    </div>
+
+    <div class="traj-timeline">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <div class="section-title" style="margin:0;white-space:nowrap;">TIMELINE</div>
+            <div class="replay-bar">
+                <button class="replay-btn" onclick="replayPrev()" title="Previous">&#9664;</button>
+                <button class="replay-btn" id="play-btn" onclick="toggleReplay()" title="Play/Pause">&#9654;</button>
+                <button class="replay-btn" onclick="replayNext()" title="Next">&#9654;&#9654;</button>
+                <button class="replay-btn" onclick="stopReplay()" title="Stop">&#9632;</button>
+                <span id="replay-status" style="font-size:0.625rem;color:var(--muted-foreground);"></span>
+            </div>
+        </div>
+        <div id="timeline-bar" style="margin-top:6px;"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var COLORS = {
+    bg:'#0B1220', surface:'#162234', primary:'#2F5D78',
+    secondary:'#27465C', text:'#D9E2E8', accent:'#F2A65A',
+    bronze:'#C99A6B', critical:'#E34B4B', roadMain:'#2F5D78',
+    roadSecondary:'#27465C', roadService:'#1E2D3D', roadFlyover:'#3A6B8C',
+    roadBridge:'#4A7B9C'
+};
+
+var MAP_W = 2000, MAP_H = 1200;
+var map = null;
+var roadLayer = null, camLayer = null, trajLayer = null, markerLayer = null;
+var flowLayer = null, congestionLayer = null, zoneLayer = null;
+var cityData = null;
+var allTrajectories = [];
+var selectedVehicle = null;
+var replayInterval = null, replayIndex = 0;
+var animFrame = null, animIdx = 0, animPlaying = false;
+
+function initMap() {
+    map = L.map('city-map', {
+        crs: L.CRS.Simple,
+        minZoom: -1,
+        maxZoom: 4,
+        zoomSnap: 0.25,
+        zoomDelta: 0.5,
+        attributionControl: false
+    });
+    map.setView([MAP_H / 2, MAP_W / 2], 0);
+
+    roadLayer = L.layerGroup().addTo(map);
+    camLayer = L.layerGroup().addTo(map);
+    trajLayer = L.layerGroup().addTo(map);
+    markerLayer = L.layerGroup().addTo(map);
+    flowLayer = L.layerGroup().addTo(map);
+    congestionLayer = L.layerGroup().addTo(map);
+    zoneLayer = L.layerGroup().addTo(map);
+
+    loadAllData();
+    window.addEventListener('resize', function() { if (map) map.invalidateSize(); });
+}
+
+async function loadAllData() {
+    var vehicleListEl = document.getElementById('vehicle-list');
+    try {
+        var resp = await fetch('/api/city-map');
+        if (!resp.ok) throw new Error('City map API returned HTTP ' + resp.status);
+        cityData = await resp.json();
+        if (!cityData.success) throw new Error('City map API returned success=false');
+
+        var trajResp = await fetch('/api/trajectories');
+        if (!trajResp.ok) throw new Error('Trajectories API returned HTTP ' + trajResp.status);
+        var trajData = await trajResp.json();
+        allTrajectories = trajData.trajectories || [];
+
+        var flowResp = await fetch('/api/city-map/traffic-flow');
+        var flowData = flowResp.ok ? await flowResp.json() : { flow: [] };
+
+        renderZones(cityData.zones || []);
+        renderRoadNetwork(cityData.roads || [], cityData.nodes || []);
+        renderCameras(cityData.cameras || []);
+        renderTrafficFlow(flowData.flow || []);
+        renderAllTrajectories();
+        renderVehicleList();
+
+        map.fitBounds([[0, 0], [MAP_H, MAP_W]], { padding: [20, 20] });
+        setTimeout(function() { map.invalidateSize(); }, 200);
+    } catch(e) {
+        console.error('Failed to load city map data:', e);
+        vehicleListEl.innerHTML = '<div style="padding:12px;color:#E34B4B;font-size:0.75rem;border:1px solid rgba(227,75,75,0.3);border-radius:4px;background:rgba(227,75,75,0.08);">' +
+            '<strong>Map Load Error</strong><br>' + e.message +
+            '<br><br><button class="btn btn-sm" onclick="location.reload()">Retry</button></div>';
+        document.getElementById('vehicle-count').textContent = '0';
+    }
+}
+
+function renderZones(zones) {
+    zoneLayer.clearLayers();
+    zones.forEach(function(z) {
+        var b = z.bounds;
+        var bounds = [[b.y1, b.x1], [b.y2, b.x2]];
+        L.rectangle(bounds, {
+            color: z.color || '#2F5D78',
+            weight: 1,
+            fillColor: z.color || '#2F5D78',
+            fillOpacity: z.opacity || 0.06,
+            dashArray: '4,4'
+        }).addTo(zoneLayer).bindPopup(
+            '<div style="font-family:IBM Plex Mono,monospace;font-size:12px;">' +
+            '<div style="font-weight:700;color:'+(z.color||'#2F5D78')+';">'+z.id+'</div>' +
+            '<div style="color:#C99A6B;">'+z.name+'</div></div>'
+        );
+    });
+}
+
+function renderRoadNetwork(roads, nodes) {
+    roadLayer.clearLayers();
+    var nodeMap = {};
+    nodes.forEach(function(n) { nodeMap[n.id] = n; });
+
+    roads.forEach(function(r) {
+        var n1 = nodeMap[r.from];
+        var n2 = nodeMap[r.to];
+        if (!n1 || !n2) return;
+
+        var coords = [[n1.y, n1.x], [n2.y, n2.x]];
+        if (r.geometry && r.geometry.length === 2) {
+            coords = [[r.geometry[0].y, r.geometry[0].x], [r.geometry[1].y, r.geometry[1].x]];
+        }
+
+        var color, weight, opacity;
+        switch(r.type) {
+            case 'main': color = COLORS.roadMain; weight = 3; opacity = 0.8; break;
+            case 'flyover': color = COLORS.roadFlyover; weight = 3; opacity = 0.7; break;
+            case 'bridge': color = COLORS.roadBridge; weight = 3; opacity = 0.7; break;
+            case 'service': color = COLORS.roadService; weight = 1.5; opacity = 0.4; break;
+            default: color = COLORS.roadSecondary; weight = 2; opacity = 0.6; break;
+        }
+
+        L.polyline(coords, {
+            color: color, weight: weight, opacity: opacity
+        }).addTo(roadLayer).bindPopup(
+            '<div style="font-family:IBM Plex Mono,monospace;font-size:11px;">' +
+            '<div style="font-weight:700;color:#2F5D78;">'+r.name+'</div>' +
+            '<div style="color:#C99A6B;">'+r.type.toUpperCase()+'</div>' +
+            '<div style="color:#D9E2E8;">Speed: '+r.speedLimit+' km/h</div>' +
+            '<div style="color:#D9E2E8;">Dir: '+r.direction+'</div></div>'
+        );
+
+        if (r.type === 'main' || r.type === 'flyover' || r.type === 'bridge') {
+            var mx = (coords[0][1] + coords[1][1]) / 2;
+            var my = (coords[0][0] + coords[1][0]) / 2;
+            var angle = Math.atan2(coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]) * 180 / Math.PI;
+            if (r.name !== 'Roundabout' && r.name !== 'Roundabout Access') {
+                L.marker([my, mx], {
+                    icon: L.divIcon({
+                        className: '',
+                        html: '<div style="font-family:IBM Plex Mono,monospace;font-size:7px;color:rgba(47,93,120,0.6);transform:rotate('+(-angle)+'deg);white-space:nowrap;">'+r.name+'</div>',
+                        iconAnchor: [0, 4]
+                    })
+                }).addTo(roadLayer);
+            }
+        }
+    });
+
+    nodes.forEach(function(n) {
+        var connections = 0;
+        roads.forEach(function(r) {
+            if (r.from === n.id || r.to === n.id) connections++;
+        });
+        if (connections > 2) {
+            L.circleMarker([n.y, n.x], {
+                radius: 3, fillColor: '#1E2D3D', color: '#2F5D78',
+                weight: 1, fillOpacity: 0.7
+            }).addTo(roadLayer);
+        }
+    });
+}
+
+function renderCameras(cameras) {
+    camLayer.clearLayers();
+    cameras.forEach(function(cam) {
+        var m = L.circleMarker([cam.y, cam.x], {
+            radius: 12, fillColor: COLORS.bronze, color: COLORS.text,
+            weight: 2, fillOpacity: 0.9
+        }).addTo(camLayer);
+
+        var popup = '<div style="font-family:IBM Plex Mono,monospace;font-size:12px;min-width:180px;">';
+        popup += '<div style="font-weight:700;color:'+COLORS.bronze+';font-size:14px;">'+cam.id+'</div>';
+        popup += '<div style="color:'+COLORS.accent+';margin:3px 0;">'+cam.name+'</div>';
+        popup += '<div style="color:'+COLORS.text+';">Zone: '+(cam.zone||'N/A')+'</div>';
+        popup += '<div style="color:'+COLORS.text+';">'+cam.description+'</div>';
+        popup += '<div style="color:'+COLORS.bronze+';font-size:10px;margin-top:4px;">Virtual Camera Position</div>';
+        popup += '</div>';
+        m.bindPopup(popup);
+
+        L.marker([cam.y, cam.x], {
+            icon: L.divIcon({
+                className: '',
+                html: '<div style="font-family:IBM Plex Mono,monospace;font-size:10px;font-weight:700;color:'+COLORS.bronze+';background:rgba(11,18,32,0.9);padding:2px 6px;border-radius:4px;white-space:nowrap;border:1px solid rgba(201,154,107,0.4);text-shadow:0 0 3px rgba(0,0,0,0.8);">'+cam.id+'</div>',
+                iconAnchor: [-12, 4]
+            })
+        }).addTo(camLayer);
+    });
+}
+
+function renderTrafficFlow(flowData) {
+    flowLayer.clearLayers();
+    congestionLayer.clearLayers();
+    if (!cityData) return;
+
+    var nodeMap = {};
+    cityData.nodes.forEach(function(n) { nodeMap[n.id] = n; });
+
+    var roadFlowMap = {};
+    flowData.forEach(function(f) { roadFlowMap[f.id] = f; });
+
+    cityData.roads.forEach(function(r) {
+        var flow = roadFlowMap[r.id];
+        if (!flow) return;
+        var n1 = nodeMap[r.from];
+        var n2 = nodeMap[r.to];
+        if (!n1 || !n2) return;
+        if (r.type === 'service' || r.name === 'Roundabout' || r.name === 'Roundabout Access') return;
+
+        var coords = [[n1.y, n1.x], [n2.y, n2.x]];
+        var vc = flow.vehicleCount || 0;
+        var cw = Math.min(1 + vc / 30, 6);
+
+        var flowColor;
+        switch(flow.congestion) {
+            case 'severe': flowColor = COLORS.critical; break;
+            case 'high': flowColor = COLORS.accent; break;
+            case 'moderate': flowColor = COLORS.bronze; break;
+            default: flowColor = 'rgba(47,93,120,0.3)'; break;
+        }
+
+        if (flow.congestion !== 'low') {
+            L.polyline(coords, {
+                color: flowColor, weight: cw, opacity: 0.6
+            }).addTo(congestionLayer);
+        }
+
+        if (vc > 0) {
+            var mx = (coords[0][1] + coords[1][1]) / 2;
+            var my = (coords[0][0] + coords[1][0]) / 2;
+            L.marker([my, mx], {
+                icon: L.divIcon({
+                    className: '',
+                    html: '<div style="font-family:IBM Plex Mono,monospace;font-size:8px;color:'+flowColor+';background:rgba(11,18,32,0.8);padding:1px 3px;border-radius:2px;">'+vc+'</div>',
+                    iconAnchor: [8, 4]
+                })
+            }).addTo(flowLayer);
+        }
+    });
+}
+
+function renderAllTrajectories() {
+    trajLayer.clearLayers();
+    markerLayer.clearLayers();
+
+    allTrajectories.forEach(function(traj) {
+        if (!traj.cityPoints || traj.cityPoints.length < 1) return;
+        var isReal = traj.mode === 'real';
+        var color = isReal ? COLORS.accent : 'rgba(201,154,107,0.5)';
+        var weight = isReal ? 3 : 2;
+        var opacity = isReal ? 0.7 : 0.35;
+
+        var coords = [];
+        traj.cityPoints.forEach(function(p) {
+            if (p.x !== undefined && p.y !== undefined) {
+                coords.push([p.y, p.x]);
+            }
+        });
+
+        if (coords.length >= 2) {
+            var line = L.polyline(coords, {
+                color: color, weight: weight, opacity: opacity
+            }).addTo(trajLayer);
+
+            line.bindPopup(
+                '<div style="font-family:IBM Plex Mono,monospace;font-size:12px;">' +
+                '<div style="font-weight:700;color:'+COLORS.accent+';">'+traj.vehicle.globalId+'</div>' +
+                '<div>Plate: '+(traj.vehicle.plate !== 'UNKNOWN' ? traj.vehicle.plate : 'NOT READ')+'</div>' +
+                '<div>Route: '+traj.cameraSequence.join(' → ')+'</div>' +
+                '<div>Mode: '+(isReal ? 'REAL VIDEO' : 'SIMULATION')+'</div>' +
+                '<div>Points: '+traj.sightingCount+'</div>' +
+                '</div>'
+            );
+        }
+
+        if (coords.length >= 1) {
+            var first = coords[0];
+            L.circleMarker(first, {
+                radius: 4, fillColor: COLORS.primary, color: COLORS.text,
+                weight: 1, fillOpacity: 0.8
+            }).addTo(trajLayer);
+        }
+
+        if (coords.length >= 2) {
+            var last = coords[coords.length - 1];
+            L.circleMarker(last, {
+                radius: 4, fillColor: COLORS.accent, color: COLORS.text,
+                weight: 1, fillOpacity: 0.8
+            }).addTo(trajLayer);
+
+            for (var ci = 0; ci < coords.length - 1; ci++) {
+                var from = coords[ci], to = coords[ci + 1];
+                var midLat = (from[0] + to[0]) / 2;
+                var midLng = (from[1] + to[1]) / 2;
+                var angle = Math.atan2(to[1] - from[1], to[0] - from[0]) * 180 / Math.PI;
+                L.marker([midLat, midLng], {
+                    icon: L.divIcon({
+                        className: '',
+                        html: '<div style="color:'+color+';font-size:10px;transform:rotate('+(-angle)+'deg);opacity:0.7;">&#9654;</div>',
+                        iconAnchor: [5, 5]
+                    })
+                }).addTo(trajLayer);
+            }
+        }
+    });
+}
+
+function renderVehicleList() {
+    var el = document.getElementById('vehicle-list');
+    document.getElementById('vehicle-count').textContent = allTrajectories.length;
+
+    if (allTrajectories.length === 0) {
+        el.innerHTML = '<div style="padding:8px;color:var(--muted-foreground);font-size:0.75rem;">No vehicles found</div>';
+        return;
+    }
+
+    var sorted = allTrajectories.slice().sort(function(a, b) { return b.sightingCount - a.sightingCount; });
+    el.innerHTML = sorted.map(function(t) {
+        var v = t.vehicle;
+        var modeClass = t.mode === 'real' ? 'mode-real' : 'mode-sim';
+        var modeText = t.mode === 'real' ? 'REAL' : 'SIM';
+        var plateText = v.plate !== 'UNKNOWN' ? v.plate : 'PLATE NOT READ';
+        var camSeq = t.cameraSequence.join(' → ');
+        var isActive = selectedVehicle && selectedVehicle.globalId === v.globalId;
+
+        return '<div class="vehicle-item'+(isActive ? ' active' : '')+'" onclick="selectVehicle(\'' + v.globalId + '\')">' +
+            '<div><span class="vi-id" style="color:'+(v.watchlist === 'flagged' ? COLORS.critical : COLORS.primary)+';">'+v.globalId+'</span>' +
+            '<span class="vi-badge '+modeClass+'">'+modeText+'</span></div>' +
+            '<div class="vi-plate">'+plateText+'</div>' +
+            '<div class="vi-cam">'+camSeq+' ('+t.sightingCount+' pts)</div>' +
+        '</div>';
+    }).join('');
+}
+
+async function searchVehicle() {
+    var q = document.getElementById('plate-search').value.trim();
+    if (!q) return;
+    document.getElementById('search-results').innerHTML = '<div style="padding:8px;color:var(--muted-foreground);font-size:0.75rem;">Searching...</div>';
+    try {
+        var resp = await fetch('/api/trajectory/search?q=' + encodeURIComponent(q));
+        var data = await resp.json();
+        if (data.results && data.results.length > 0) {
+            document.getElementById('search-results').innerHTML = data.results.map(function(r) {
+                return '<div class="search-result-item" onclick="selectVehicle(\'' + r.globalId + '\')">' +
+                    '<div class="sr-plate" style="color:'+(r.watchlist === 'flagged' ? COLORS.critical : COLORS.primary)+';">'+(r.plate !== 'UNKNOWN' ? r.plate : 'No plate')+'</div>' +
+                    '<div class="sr-meta">'+r.globalId+' | '+r.sightingCount+' pts | '+r.cameraCount+' cams</div></div>';
+            }).join('');
+        } else {
+            document.getElementById('search-results').innerHTML = '<div style="padding:8px;color:var(--muted-foreground);">No results</div>';
+        }
+    } catch(e) {
+        document.getElementById('search-results').innerHTML = '<div style="padding:8px;color:'+COLORS.critical+';">Search failed</div>';
+    }
+}
+
+async function selectVehicle(globalId) {
+    document.getElementById('search-results').innerHTML = '';
+    document.getElementById('plate-search').value = globalId;
+    stopReplay();
+    stopAnimation();
+
+    document.getElementById('btn-selected').style.display = '';
+    document.getElementById('btn-selected').classList.add('active');
+    document.querySelectorAll('.tab-btn:not(#btn-selected)').forEach(function(b) { b.classList.remove('active'); });
+
+    var infoPanel = document.getElementById('info-panel');
+    infoPanel.innerHTML = '<div style="padding:12px;color:var(--muted-foreground);text-align:center;">Loading...</div>';
+
+    try {
+        var resp = await fetch('/api/trajectory/' + encodeURIComponent(globalId));
+        var data = await resp.json();
+        if (!data.success) {
+            infoPanel.innerHTML = '<div style="padding:12px;color:'+COLORS.critical+';">'+(data.error || 'Not found')+'</div>';
+            return;
+        }
+        selectedVehicle = data;
+        renderInfoPanel(data);
+        highlightSelectedTrajectory(data);
+        renderTimeline(data);
+        showModeBadge(data.mode);
+    } catch(e) {
+        infoPanel.innerHTML = '<div style="padding:12px;color:'+COLORS.critical+';">Failed to load</div>';
+    }
+}
+
+function renderInfoPanel(data) {
+    var v = data.vehicle, s = data.summary;
+    var el = document.getElementById('info-panel');
+    var wlColor = v.watchlist === 'flagged' ? COLORS.critical : v.watchlist === 'monitored' ? COLORS.bronze : '#2F5D78';
+
+    var h = '<div style="margin-bottom:12px;">';
+    h += '<div class="section-title">Selected Vehicle</div>';
+    h += '<div style="font-family:IBM Plex Mono,monospace;font-size:1rem;font-weight:700;color:'+COLORS.accent+';">'+v.globalId+'</div>';
+    h += '<div style="font-family:IBM Plex Mono,monospace;font-size:0.875rem;font-weight:600;margin-top:2px;">'+(v.plate !== 'UNKNOWN' ? v.plate : 'Plate not read')+'</div>';
+    h += '</div>';
+
+    h += '<div style="margin-bottom:12px;">';
+    h += '<div class="info-row"><span class="label">Type</span><span class="value">'+v.vehicleType+'</span></div>';
+    h += '<div class="info-row"><span class="label">Watchlist</span><span class="value" style="color:'+wlColor+';">'+v.watchlist+'</span></div>';
+    h += '<div class="info-row"><span class="label">First Seen</span><span class="value" style="font-size:0.6875rem;">'+v.firstSeen+'</span></div>';
+    h += '<div class="info-row"><span class="label">Last Seen</span><span class="value" style="font-size:0.6875rem;">'+v.lastSeen+'</span></div>';
+    h += '<div class="info-row"><span class="label">Duration</span><span class="value">'+s.durationFormatted+'</span></div>';
+    h += '<div class="info-row"><span class="label">Sightings</span><span class="value">'+s.totalSightings+'</span></div>';
+    h += '<div class="info-row"><span class="label">Cameras</span><span class="value">'+s.uniqueCameras+'</span></div>';
+    h += '</div>';
+
+    if (s.cameraSequence.length > 1) {
+        h += '<div style="margin-bottom:12px;"><div class="section-title">Camera Route</div><div class="cam-chain">';
+        for (var ci = 0; ci < s.cameraSequence.length; ci++) {
+            h += '<span class="cam-node">'+s.cameraSequence[ci]+'</span>';
+            if (ci < s.cameraSequence.length - 1) {
+                h += '<span class="cam-arrow">&rarr;</span>';
+            }
+        }
+        h += '</div></div>';
+    }
+
+    if (data.evidence && data.evidence.length > 0) {
+        h += '<div><div class="section-title">Evidence ('+data.evidence.length+')</div><div style="max-height:160px;overflow-y:auto;">';
+        data.evidence.slice(0, 8).forEach(function(e) {
+            h += '<div style="padding:4px 0;border-bottom:1px solid rgba(30,45,61,0.4);font-size:0.6875rem;">';
+            h += '<span style="color:'+COLORS.primary+';font-family:IBM Plex Mono,monospace;font-weight:600;">'+(e.plateText || '?')+'</span>';
+            h += ' <span style="color:var(--muted-foreground);">'+e.cameraId+' | '+e.timestamp+' | '+e.ocrConfidence+'%</span>';
+            if (e.evidenceCrop) h += '<br><img class="evidence-thumb" src="'+e.evidenceCrop+'" loading="lazy" onerror="this.style.display=\'none\'">';
+            h += '</div>';
+        });
+        h += '</div></div>';
+    }
+
+    h += '<div style="margin-top:12px;display:flex;gap:6px;">';
+    h += '<button class="btn btn-primary" style="flex:1;font-size:0.75rem;padding:6px;" onclick="startAnimation()">PLAY TRAJECTORY</button>';
+    h += '<button class="btn" style="font-size:0.75rem;padding:6px;" onclick="resetMap()">RESET</button>';
+    h += '</div>';
+    el.innerHTML = h;
+}
+
+function highlightSelectedTrajectory(data) {
+    trajLayer.clearLayers();
+
+    var coords = [];
+    data.cityPoints.forEach(function(p) {
+        if (p.x !== undefined && p.y !== undefined) {
+            coords.push([p.y, p.x]);
+        }
+    });
+
+    if (coords.length >= 2) {
+        L.polyline(coords, {
+            color: COLORS.accent, weight: 5, opacity: 1
+        }).addTo(trajLayer);
+
+        for (var ci = 0; ci < coords.length - 1; ci++) {
+            var from = coords[ci], to = coords[ci + 1];
+            var midLat = (from[0] + to[0]) / 2;
+            var midLng = (from[1] + to[1]) / 2;
+            var angle = Math.atan2(to[1] - from[1], to[0] - from[0]) * 180 / Math.PI;
+            L.marker([midLat, midLng], {
+                icon: L.divIcon({
+                    className: '',
+                    html: '<div style="color:'+COLORS.accent+';font-size:12px;transform:rotate('+(-angle)+'deg);">&#9654;</div>',
+                    iconAnchor: [6, 6]
+                })
+            }).addTo(trajLayer);
+        }
+    }
+
+    coords.forEach(function(coord, i) {
+        var p = data.cityPoints[i];
+        if (!p) return;
+        var isStart = i === 0, isEnd = i === coords.length - 1;
+        var fillColor = isStart ? COLORS.primary : isEnd ? COLORS.accent : COLORS.bronze;
+
+        var mkr = L.circleMarker(coord, {
+            radius: isStart || isEnd ? 9 : 5,
+            fillColor: fillColor, color: COLORS.text, weight: 2, fillOpacity: 1
+        }).addTo(trajLayer);
+
+        var pop = '<div style="font-family:IBM Plex Mono,monospace;font-size:12px;min-width:170px;">';
+        pop += '<div style="font-weight:700;color:'+COLORS.accent+';">'+data.vehicle.globalId+'</div>';
+        pop += '<div>Plate: '+(data.vehicle.plate !== 'UNKNOWN' ? data.vehicle.plate : 'NOT READ')+'</div>';
+        pop += '<div style="color:'+COLORS.primary+';">Source: '+(p.cameraId || 'N/A')+'</div>';
+        pop += '<div>Time: '+(p.timestamp || 'N/A')+'</div>';
+        pop += '<div style="color:'+COLORS.bronze+';">Track: T-'+(p.localTrackId || '?')+'</div>';
+        pop += '<div style="color:'+COLORS.bronze+';font-size:10px;margin-top:3px;">REAL VIDEO + VIRTUAL CITY MAP</div>';
+        pop += '</div>';
+        mkr.bindPopup(pop);
+    });
+
+    if (coords.length > 0) {
+        map.fitBounds(coords, { padding: [80, 80], maxZoom: 2 });
+    }
+}
+
+function renderTimeline(data) {
+    var el = document.getElementById('timeline-bar');
+    var seen = {};
+    var points = [];
+    data.cityPoints.forEach(function(p) {
+        var key = p.cameraId + '_' + p.timestamp;
+        if (!seen[key]) { seen[key] = true; points.push(p); }
+    });
+    if (points.length === 0) {
+        el.innerHTML = '<span style="color:var(--muted-foreground);font-size:0.75rem;">No timeline data</span>';
+        return;
+    }
+    el.innerHTML = points.map(function(p, i) {
+        return '<div class="timeline-point'+(i === 0 ? ' active' : '')+'" onclick="highlightPoint('+i+',this)">' +
+            '<span class="tp-cam">'+p.cameraId+'</span>' +
+            '<span class="tp-time">'+p.timestamp+'</span>' +
+            '<div class="tp-dot"></div></div>';
+    }).join('');
+}
+
+function highlightPoint(idx, el) {
+    document.querySelectorAll('.timeline-point').forEach(function(tp) { tp.classList.remove('active'); });
+    if (el) el.classList.add('active');
+}
+
+function toggleReplay() {
+    if (replayInterval) { stopReplay(); return; }
+    startReplay();
+}
+
+function startReplay() {
+    if (replayInterval) { stopReplay(); return; }
+    var pts = document.querySelectorAll('.timeline-point');
+    if (pts.length === 0) return;
+    replayIndex = 0;
+    document.getElementById('replay-status').textContent = 'Playing...';
+    document.getElementById('play-btn').innerHTML = '&#9646;&#9646;';
+    replayInterval = setInterval(function() {
+        if (replayIndex >= pts.length) { stopReplay(); return; }
+        highlightPoint(replayIndex, pts[replayIndex]);
+        replayIndex++;
+    }, 1200);
+}
+
+function stopReplay() {
+    if (replayInterval) { clearInterval(replayInterval); replayInterval = null; }
+    document.getElementById('replay-status').textContent = '';
+    document.getElementById('play-btn').innerHTML = '&#9654;';
+}
+
+function replayPrev() {
+    if (replayIndex > 0) {
+        replayIndex--;
+        var pts = document.querySelectorAll('.timeline-point');
+        highlightPoint(replayIndex, pts[Math.min(replayIndex, pts.length - 1)]);
+    }
+}
+
+function replayNext() {
+    var pts = document.querySelectorAll('.timeline-point');
+    if (replayIndex < pts.length - 1) {
+        replayIndex++;
+        highlightPoint(replayIndex, pts[replayIndex]);
+    }
+}
+
+function startAnimation() {
+    if (!selectedVehicle) return;
+    stopAnimation();
+    animIdx = 0;
+    animPlaying = true;
+
+    var coords = [];
+    selectedVehicle.cityPoints.forEach(function(p) {
+        if (p.x !== undefined && p.y !== undefined) coords.push([p.y, p.x]);
+    });
+    if (coords.length < 2) return;
+
+    var animMarker = L.circleMarker(coords[0], {
+        radius: 10, fillColor: COLORS.accent, color: COLORS.text,
+        weight: 3, fillOpacity: 1, zIndexOffset: 1000
+    }).addTo(markerLayer);
+
+    animMarker.bindPopup(
+        '<div style="font-family:IBM Plex Mono,monospace;font-size:12px;">' +
+        '<div style="font-weight:700;color:'+COLORS.accent+';">'+selectedVehicle.vehicle.globalId+'</div>' +
+        '<div>Plate: '+selectedVehicle.vehicle.plate+'</div>' +
+        '<div id="anim-status">Starting...</div>' +
+        '</div>'
+    );
+
+    function animStep() {
+        if (!animPlaying || animIdx >= coords.length) {
+            animPlaying = false;
+            markerLayer.clearLayers();
+            return;
+        }
+
+        animMarker.setLatLng(coords[animIdx]);
+        var p = selectedVehicle.cityPoints[animIdx];
+        if (p) {
+            var pop = '<div style="font-family:IBM Plex Mono,monospace;font-size:12px;">' +
+                '<div style="font-weight:700;color:'+COLORS.accent+';">'+selectedVehicle.vehicle.globalId+'</div>' +
+                '<div>Plate: '+selectedVehicle.vehicle.plate+'</div>' +
+                '<div style="color:'+COLORS.primary+';">'+(p.cameraId || 'N/A')+'</div>' +
+                '<div>'+(p.timestamp || '')+'</div>' +
+                '<div style="color:'+COLORS.bronze+';">T-'+(p.localTrackId || '?')+'</div>' +
+                '</div>';
+            animMarker.setPopupContent(pop);
+            animMarker.openPopup();
+        }
+
+        animIdx++;
+        animFrame = setTimeout(animStep, 300);
+    }
+
+    animStep();
+}
+
+function stopAnimation() {
+    animPlaying = false;
+    if (animFrame) { clearTimeout(animFrame); animFrame = null; }
+    markerLayer.clearLayers();
+    if (selectedVehicle) {
+        selectedVehicle.cityPoints.forEach(function(p) {
+            if (p.x !== undefined && p.y !== undefined) {
+                L.circleMarker([p.y, p.x], {
+                    radius: 4, fillColor: COLORS.bronze, color: COLORS.text,
+                    weight: 1, fillOpacity: 0.7
+                }).addTo(markerLayer);
+            }
+        });
+    }
+}
+
+function showModeBadge(mode) {
+    var badge = document.getElementById('map-mode-badge');
+    if (mode === 'simulation') {
+        badge.className = 'map-badge badge-sim';
+        badge.textContent = 'SIMULATION';
+        document.getElementById('data-source-badge').innerHTML = '<div class="sim-banner">VIRTUAL CITY MAP — Simulation trajectory for demonstration</div>';
+    } else {
+        badge.className = 'map-badge badge-real';
+        badge.textContent = 'REAL';
+        document.getElementById('data-source-badge').innerHTML = '<div class="real-banner">REAL VIDEO + VIRTUAL CITY MAP</div>';
+    }
+}
+
+function showAll() {
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-btn')[0].classList.add('active');
+    document.getElementById('btn-selected').style.display = 'none';
+    selectedVehicle = null;
+    stopAnimation();
+    stopReplay();
+    renderAllTrajectories();
+    renderVehicleList();
+    document.getElementById('info-panel').innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted-foreground);"><p style="font-size:0.875rem;font-weight:600;">Select a vehicle</p><p style="font-size:0.75rem;margin-top:4px;">Search or click from the list below</p></div>';
+    document.getElementById('data-source-badge').innerHTML = '';
+    document.getElementById('timeline-bar').innerHTML = '';
+    if (cityData) {
+        var camCoords = cityData.cameras.map(function(c) { return [c.y, c.x]; });
+        if (camCoords.length > 0) map.fitBounds(camCoords, { padding: [60, 60] });
+    }
+}
+
+function showSelected() {}
+
+function toggleLayer(layer) {
+    var checked = document.getElementById('layer-' + layer).checked;
+    switch(layer) {
+        case 'roads': if (checked) roadLayer.addTo(map); else map.removeLayer(roadLayer); break;
+        case 'cameras': if (checked) camLayer.addTo(map); else map.removeLayer(camLayer); break;
+        case 'trajectories': if (checked) trajLayer.addTo(map); else map.removeLayer(trajLayer); break;
+        case 'markers': if (checked) markerLayer.addTo(map); else map.removeLayer(markerLayer); break;
+        case 'flow': if (checked) flowLayer.addTo(map); else map.removeLayer(flowLayer); break;
+        case 'congestion': if (checked) congestionLayer.addTo(map); else map.removeLayer(congestionLayer); break;
+        case 'zones': if (checked) zoneLayer.addTo(map); else map.removeLayer(zoneLayer); break;
+    }
+}
+
+function resetMap() {
+    stopAnimation();
+    stopReplay();
+    showAll();
+    if (cityData) {
+        var camCoords = cityData.cameras.map(function(c) { return [c.y, c.x]; });
+        if (camCoords.length > 0) map.fitBounds(camCoords, { padding: [60, 60] });
+        else map.fitBounds([[0, 0], [MAP_H, MAP_W]], { padding: [20, 20] });
+    }
+}
+
+try {
+    initMap();
+    console.log('NAVONMESH: Map initialized successfully');
+} catch(e) {
+    console.error('NAVONMESH: Map init failed:', e);
+    var mapEl = document.getElementById('city-map');
+    if (mapEl) {
+        mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#E34B4B;font-family:IBM Plex Mono,monospace;font-size:14px;text-align:center;padding:40px;">' +
+            '<div><strong>Map Initialization Error</strong><br><br>' + e.message +
+            '<br><br><button class="btn btn-sm" onclick="location.reload()" style="margin-top:12px;">Retry</button></div></div>';
+    }
+}
+var params = new URLSearchParams(window.location.search);
+var plate = params.get('plate') || params.get('q') || params.get('id');
+if (plate) { document.getElementById('plate-search').value = plate; selectVehicle(plate); }
+</script>
+{% endblock %}

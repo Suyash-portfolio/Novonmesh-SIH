@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div>
+    <section class="panel hero-panel" style="padding: 24px 32px;">
+        <div style="max-width: 720px;">
+            <p class="mono-label">Recorded Video Analysis Engine</p>
+            <h1 style="margin-top: 8px;">City-Wide AI Engine for <span class="gradient-text">ANPR Trajectory Tracking</span></h1>
+            <p style="margin-top: 12px; max-width: 580px; color: var(--muted-foreground); font-size: 0.875rem;">
+                Upload recorded CCTV footage. The AI engine detects vehicles, tracks them across frames, reads license plates, and reconstructs trajectories from actual video analysis.
+            </p>
+            <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
+                <a href="/upload" class="btn btn-primary">Upload Video</a>
+                <a href="/tracking" class="btn btn-secondary">Track a vehicle</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <span class="kpi-label">Vehicles Detected</span>
+                <div class="kpi-icon success">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C1.4 11.3 1 12.1 1 13v3c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
+                </div>
+            </div>
+            <div class="kpi-value" id="kpi-vehicles">--</div>
+            <div class="kpi-delta" id="kpi-vehicles-delta"></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <span class="kpi-label">Unique Vehicles</span>
+                <div class="kpi-icon primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                </div>
+            </div>
+            <div class="kpi-value" id="kpi-unique">--</div>
+            <div class="kpi-delta" id="kpi-unique-delta"></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <span class="kpi-label">Plates Detected</span>
+                <div class="kpi-icon accent">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>
+                </div>
+            </div>
+            <div class="kpi-value" id="kpi-plates">--</div>
+            <div class="kpi-delta" id="kpi-plates-delta"></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <span class="kpi-label">Active Alerts</span>
+                <div class="kpi-icon destructive">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                </div>
+            </div>
+            <div class="kpi-value" id="kpi-alerts">--</div>
+            <div class="kpi-delta" id="kpi-alerts-delta"></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <span class="kpi-label">Video Sources</span>
+                <div class="kpi-icon accent">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                </div>
+            </div>
+            <div class="kpi-value" id="kpi-sources">--</div>
+            <div class="kpi-delta" id="kpi-sources-delta"></div>
+        </div>
+    </section>
+
+    <section style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+        <div class="kpi-card">
+            <div class="kpi-label">Camera Transitions</div>
+            <div class="kpi-value" id="kpi-transitions" style="font-size: 1.5rem;">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Multi-Camera Vehicles</div>
+            <div class="kpi-value" id="kpi-multi-cam" style="font-size: 1.5rem;">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Virtual Cameras</div>
+            <div class="kpi-value" id="kpi-cameras" style="font-size: 1.5rem;">--</div>
+        </div>
+    </section>
+
+    <section style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+        <div class="panel p-5">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <div>
+                    <h2 style="font-size: 1rem; font-weight: 600;">Recent Detections</h2>
+                    <p class="mono-label" style="margin-top: 4px;">Real detections from processed videos</p>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="data-table" id="detections-table">
+                    <thead>
+                        <tr>
+                            <th>Track</th><th>Type</th><th>Confidence</th><th>Frame</th><th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detections-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="panel p-5">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <div>
+                    <h2 style="font-size: 1rem; font-weight: 600;">Detected Plates</h2>
+                    <p class="mono-label" style="margin-top: 4px;">Actual OCR results from videos</p>
+                </div>
+                <a href="/plates" style="font-size: 0.875rem; font-weight: 600; color: #2F5D78;">View all →</a>
+            </div>
+            <div id="plates-preview-container"></div>
+        </div>
+    </section>
+
+    <section class="panel p-5">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <h2 style="font-size: 1rem; font-weight: 600;">Live Alerts</h2>
+            <a href="/alerts" style="font-size: 0.875rem; font-weight: 600; color: #2F5D78;">View all →</a>
+        </div>
+        <ul id="alerts-list" style="list-style: none;"></ul>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadDashboard() {
+    try {
+        const stats = await API.get('/api/dashboard/stats');
+        document.getElementById('kpi-vehicles').textContent = (stats.totalVehiclesDetected || 0).toLocaleString();
+        document.getElementById('kpi-vehicles-delta').textContent = 'total detection records';
+        document.getElementById('kpi-unique').textContent = (stats.uniqueVehicles || 0).toLocaleString();
+        document.getElementById('kpi-unique-delta').textContent = 'vehicles tracked';
+        document.getElementById('kpi-plates').textContent = (stats.vehiclesWithPlates || 0).toLocaleString();
+        document.getElementById('kpi-plates-delta').textContent = (stats.totalPlateReads || 0) + ' reads · ' + (stats.uniquePlates || 0) + ' unique plates';
+        document.getElementById('kpi-alerts').textContent = stats.activeAlerts || 0;
+        document.getElementById('kpi-alerts-delta').textContent = (stats.criticalAlerts || 0) + ' critical · ' + (stats.warningAlerts || 0) + ' warnings';
+        document.getElementById('kpi-sources').textContent = (stats.totalSources || 0);
+        document.getElementById('kpi-sources-delta').textContent = 'recorded videos analyzed';
+        document.getElementById('kpi-transitions').textContent = (stats.cameraTransitions || 0);
+        document.getElementById('kpi-multi-cam').textContent = (stats.vehiclesOnMultipleCameras || 0);
+        document.getElementById('kpi-cameras').textContent = (stats.cameraCount || 0);
+    } catch (e) {
+        console.warn('Dashboard stats failed:', e);
+    }
+
+    try {
+        const detections = await API.get('/api/detections?limit=8');
+        renderDetections(Array.isArray(detections) ? detections : []);
+    } catch (e) {
+        console.warn('Detections load failed:', e);
+    }
+
+    try {
+        const vehicles = await API.get('/api/vehicles?per_page=6');
+        renderVehicles(vehicles);
+    } catch (e) {
+        console.warn('Vehicles load failed:', e);
+    }
+
+    try {
+        const plates = await API.get('/api/plates?confidence=all');
+        renderPlatesPreview(Array.isArray(plates) ? plates.slice(0, 6) : []);
+    } catch (e) {
+        console.warn('Plates load failed:', e);
+    }
+
+    try {
+        const alerts = await API.get('/api/alerts?status=open&limit=5');
+        renderAlerts(Array.isArray(alerts) ? alerts : []);
+    } catch (e) {
+        console.warn('Alerts load failed:', e);
+    }
+}
+
+function renderDetections(detections) {
+    const el = document.getElementById('detections-body');
+    if (!el) return;
+    if (!detections.length) {
+        el.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--muted-foreground); padding: 24px;">No detections yet. Upload a video to get started.</td></tr>';
+        return;
+    }
+    el.innerHTML = detections.map(function(d) {
+        var ts = d.timestamp ? d.timestamp.toFixed(1) + 's' : '-';
+        return '<tr>' +
+            '<td class="font-semibold">#' + (d.vehicleLocalId || '-') + '</td>' +
+            '<td class="text-primary">' + (d.vehicleClass || 'Unknown') + '</td>' +
+            '<td class="' + (d.confidence < 0.7 ? 'text-warning' : 'text-success') + '">' + Math.round(d.confidence * 100) + '%</td>' +
+            '<td class="text-muted">' + d.frameIndex + ' (' + ts + ')</td>' +
+            '<td class="text-muted">' + (d.cameraId || '-') + '</td>' +
+            '</tr>';
+    }).join('');
+}
+
+function renderVehicles(data) {
+    const el = document.getElementById('vehicles-container');
+    if (!el) return;
+    const vehicles = data.vehicles || [];
+    if (!vehicles.length) {
+        el.innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No vehicles detected yet.</p>';
+        return;
+    }
+    el.innerHTML = vehicles.map(function(v) {
+        var plateDisplay = v.plate !== 'UNKNOWN' ? v.plate : '<span style="color: var(--muted-foreground);">Not read</span>';
+        return '<div style="border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">' +
+            '<div>' +
+            '<p style="font-family: \'IBM Plex Mono\', monospace; font-weight: 600; font-size: 0.875rem; color: #2F5D78;">' + v.globalId + '</p>' +
+            '<p style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 2px;">' + (v.type || 'Unknown') + ' · ' + plateDisplay + '</p>' +
+            '</div>' +
+            '<a href="/tracking?q=' + encodeURIComponent(v.globalId) + '" class="btn btn-secondary btn-sm" style="font-size: 0.7rem;">Track</a>' +
+            '</div>';
+    }).join('');
+}
+
+function renderAlerts(alerts) {
+    const el = document.getElementById('alerts-list');
+    if (!el) return;
+    if (!alerts.length) {
+        el.innerHTML = '<li style="text-align: center; color: var(--muted-foreground); padding: 24px;">No active alerts</li>';
+        return;
+    }
+    el.innerHTML = alerts.map(function(a) {
+        return '<li style="border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 14px; margin-bottom: 10px;">' +
+            '<div style="display: flex; align-items: center; justify-content: space-between;">' +
+            '<span class="mono-label" style="color: ' + (a.severity === 'critical' ? 'var(--destructive)' : a.severity === 'warning' ? '#F2A65A' : '#2F5D78') + ';">' +
+            (a.kind || 'ALERT') +
+            '</span>' +
+            '<span class="mono-label">' + (a.alertId || '') + '</span>' +
+            '</div>' +
+            '<p style="margin-top: 4px; font-family: \'IBM Plex Mono\', monospace; font-weight: 600;">' + (a.plate || 'N/A') + '</p>' +
+            '<p style="margin-top: 4px; font-size: 0.8125rem; color: var(--muted-foreground);">' + (a.detail || '') + '</p>' +
+            '</li>';
+    }).join('');
+}
+
+loadDashboard();
+setInterval(loadDashboard, 5000);
+
+function renderPlatesPreview(plates) {
+    const el = document.getElementById('plates-preview-container');
+    if (!el) return;
+    if (!plates.length) {
+        el.innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No plates detected yet. Process a video to detect plates.</p>';
+        return;
+    }
+    el.innerHTML = plates.map(function(p) {
+        var conf = (p.ocrConfidence * 100).toFixed(0);
+        var confColor = p.ocrConfidence >= 0.85 ? '#2F5D78' : p.ocrConfidence >= 0.6 ? '#C99A6B' : '#F2A65A';
+        return '<div style="border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" onclick="window.location=\'/plates\'">' +
+            '<div style="display: flex; align-items: center; gap: 10px;">' +
+            '<span style="font-family: \'IBM Plex Mono\', monospace; font-weight: 600; font-size: 0.875rem;">' + (p.plateText || '-') + '</span>' +
+            '<span style="font-size: 0.65rem; padding: 1px 5px; border-radius: 3px; background: ' + confColor + '22; color: ' + confColor + ';">' + conf + '%</span>' +
+            '</div>' +
+            '<div style="display: flex; align-items: center; gap: 8px;">' +
+            '<span style="font-size: 0.7rem; color: var(--muted-foreground);">' + (p.globalId || '-') + '</span>' +
+            '<span style="font-size: 0.7rem; color: var(--muted-foreground);">T' + (p.trackId || '-') + '</span>' +
+            '</div>' +
+            '</div>';
+    }).join('');
+}
+</script>
+{% endblock %}

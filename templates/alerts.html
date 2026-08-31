@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+<div>
+    <div class="page-header">
+        <p class="mono-label">Monitoring</p>
+        <h1>Alerts & Watchlist Hits</h1>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+        <div class="kpi-card"><div class="kpi-label">Blacklisted</div><div class="kpi-value" id="al-blacklisted">N/A</div></div>
+        <div class="kpi-card"><div class="kpi-label">Suspicious Route</div><div class="kpi-value" id="al-suspicious">N/A</div></div>
+        <div class="kpi-card"><div class="kpi-label">Low OCR</div><div class="kpi-value" id="al-lowocr">N/A</div></div>
+    </div>
+
+    <div id="alerts-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadAlerts() {
+    try {
+        const alerts = await API.get('/api/alerts');
+        renderAlerts(alerts);
+    } catch (e) {
+        document.getElementById('alerts-container').innerHTML = '<p style="color: var(--muted-foreground); text-align: center; padding: 40px; grid-column: 1/-1;">Failed to load alerts</p>';
+    }
+}
+
+function renderAlerts(alerts) {
+    const container = document.getElementById('alerts-container');
+    const blacklisted = alerts.filter(a => a.kind === 'BLACKLIST').length;
+    const suspicious = alerts.filter(a => a.kind === 'SUSPICIOUS_ROUTE').length;
+    const lowOcr = alerts.filter(a => a.kind === 'LOW_OCR').length;
+
+    document.getElementById('al-blacklisted').textContent = blacklisted;
+    document.getElementById('al-suspicious').textContent = suspicious;
+    document.getElementById('al-lowocr').textContent = lowOcr;
+
+    if (!alerts.length) {
+        container.innerHTML = '<div class="panel" style="text-align: center; padding: 48px; grid-column: 1/-1;"><p style="color: var(--muted-foreground);">No alerts detected</p></div>';
+        return;
+    }
+
+    const kindLabels = { 'BLACKLIST': 'Blacklisted Vehicle', 'SUSPICIOUS_ROUTE': 'Suspicious Route', 'LOW_OCR': 'Low OCR Confidence' };
+    const severityColors = { critical: 'var(--destructive)', warning: '#F2A65A', info: '#2F5D78' };
+    const kindIcons = {
+        'BLACKLIST': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>',
+        'SUSPICIOUS_ROUTE': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+        'LOW_OCR': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>'
+    };
+
+    container.innerHTML = alerts.map(a => `
+        <div class="alert-card" style="border-left: 3px solid ${severityColors[a.severity] || 'var(--border)'};">
+            <div class="alert-card-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: ${severityColors[a.severity] || 'var(--muted-foreground)'}">${kindIcons[a.kind] || ''}</span>
+                    <span class="mono-label" style="color: ${severityColors[a.severity] || 'var(--muted-foreground)'}">${kindLabels[a.kind] || a.kind}</span>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span class="badge badge-${a.severity}">${a.severity}</span>
+                    <span class="badge badge-${a.status === 'open' ? 'critical' : a.status === 'acknowledged' ? 'warning' : 'success'}">${a.status}</span>
+                </div>
+            </div>
+            <div class="alert-card-plate">${a.plate}</div>
+            <div class="alert-card-detail">${a.detail}</div>
+            <div class="alert-card-meta">
+                <span>${a.camera}</span>
+                <span>${a.time}</span>
+                <span>${a.alertId}</span>
+            </div>
+            ${a.status === 'open' ? `
+                <div style="margin-top: 12px; display: flex; gap: 8px;">
+                    <button class="btn btn-secondary btn-sm" onclick="acknowledgeAlert(${a.id})">Acknowledge</button>
+                    <button class="btn btn-success btn-sm" onclick="resolveAlert(${a.id})">Resolve</button>
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+async function acknowledgeAlert(id) {
+    try {
+        await API.put('/api/alerts/' + id + '/acknowledge');
+        loadAlerts();
+    } catch (e) { alert('Failed: ' + e.message); }
+}
+
+async function resolveAlert(id) {
+    try {
+        await API.put('/api/alerts/' + id + '/resolve');
+        loadAlerts();
+    } catch (e) { alert('Failed: ' + e.message); }
+}
+
+loadAlerts();
+</script>
+{% endblock %}

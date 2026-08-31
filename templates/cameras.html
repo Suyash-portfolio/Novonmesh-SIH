@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Video Sources{% endblock %}
+{% block content %}
+<div>
+    <div class="page-header">
+        <p class="mono-label">Recorded Video Analysis</p>
+        <h1>Video Sources</h1>
+        <p>Uploaded video files are processed by the AI engine for vehicle detection, tracking, and license plate recognition.</p>
+    </div>
+    <div class="grid-2" id="cameras-grid" style="grid-template-columns: repeat(2, 1fr);">
+        <p style="color: var(--muted-foreground); text-align: center; padding: 40px; grid-column: 1/-1;">Loading video sources...</p>
+    </div>
+    <div id="video-player-section" style="display: none; margin-top: 24px;">
+        <div class="panel p-5">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <h2 style="font-size: 1rem; font-weight: 600;">Video Player</h2>
+                <span class="mono-label" id="player-filename"></span>
+            </div>
+            <video id="video-player" controls style="width: 100%; max-height: 480px; border-radius: 8px; background: #000;"></video>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCameras() {
+    try {
+        const videos = await API.get('/api/videos');
+        renderVideoSources(Array.isArray(videos) ? videos : []);
+    } catch (e) {
+        document.getElementById('cameras-grid').innerHTML = '<p style="color: var(--muted-foreground); text-align: center; padding: 40px; grid-column: 1/-1;">No video sources found.</p>';
+    }
+}
+
+function renderVideoSources(videos) {
+    const grid = document.getElementById('cameras-grid');
+    if (!videos.length) {
+        grid.innerHTML = '<p style="color: var(--muted-foreground); text-align: center; padding: 40px; grid-column: 1/-1;">No video files in uploads/ folder. Upload a video to get started.</p>';
+        return;
+    }
+
+    grid.innerHTML = videos.map(function(v) {
+        var info = '';
+        if (v.fps) info += v.fps + ' FPS';
+        if (v.width && v.height) info += ' · ' + v.width + 'x' + v.height;
+        if (v.duration) info += ' · ' + v.duration + 's';
+        if (!info) info = v.sizeFormatted || '';
+
+        var camId = v.cameraId || 'N/A';
+
+        return '<div class="camera-card" style="cursor: pointer;" onclick="playVideo(\'' + v.filename + '\')">' +
+            '<div class="camera-card-header" style="background: linear-gradient(135deg, var(--surface), var(--surface-2)); display: flex; align-items: center; justify-content: center;">' +
+            '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--muted-foreground)" stroke-width="1.5" opacity="0.3"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+            '<div class="camera-card-badges">' +
+            '<span class="badge badge-' + (v.status === 'ready' ? 'online' : 'offline') + '">' + camId + '</span>' +
+            '</div>' +
+            '<div class="camera-card-overlay" style="padding: 12px;">' +
+            '<p style="font-size: 0.875rem; font-weight: 600;">' + v.filename + '</p>' +
+            '<p style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.6875rem; color: var(--muted-foreground);">' + info + '</p>' +
+            '</div>' +
+            '</div>' +
+            '<div class="camera-card-body">' +
+            '<div style="display: flex; justify-content: space-between; align-items: center;">' +
+            '<span style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; color: var(--muted-foreground);">' + v.sizeFormatted + '</span>' +
+            '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); processVideo(\'' + v.filename + '\')">Process</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+    }).join('');
+}
+
+function playVideo(filename) {
+    var section = document.getElementById('video-player-section');
+    var player = document.getElementById('video-player');
+    var label = document.getElementById('player-filename');
+    section.style.display = 'block';
+    player.src = '/api/videos/' + encodeURIComponent(filename) + '/stream';
+    label.textContent = filename;
+    player.load();
+    section.scrollIntoView({ behavior: 'smooth' });
+}
+
+function processVideo(filename) {
+    fetch('/api/upload/process-existing', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename: filename})
+    })
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(r) {
+        if (!r.ok) throw new Error(r.data.error || 'Processing failed');
+        alert('Processing started: ' + r.data.job_id);
+    })
+    .catch(function(e) { alert('Error: ' + e.message); });
+}
+
+loadCameras();
+setInterval(loadCameras, 5000);
+</script>
+{% endblock %}

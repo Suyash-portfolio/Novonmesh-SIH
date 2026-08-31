@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Upload & Process{% endblock %}
+{% block content %}
+<div>
+    <div class="page-header">
+        <p class="mono-label">Recorded Video Analysis</p>
+        <h1>Upload & Process</h1>
+        <p>Upload a recorded CCTV video file or select one from the uploads folder. The system will run YOLO vehicle detection, tracking, plate detection, OCR, and generate annotated output video.</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+        <div class="panel p-5">
+            <h2 style="font-size: 1rem; font-weight: 600; margin-bottom: 16px;">Upload New Video</h2>
+            <div class="upload-zone" id="upload-zone" onclick="document.getElementById('video-input').click()">
+                <div class="upload-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+                <p style="font-weight: 600;">Click to select video file</p>
+                <p style="font-size: 0.75rem; color: var(--muted-foreground);">MP4, AVI, MOV, MKV, WMV, WebM</p>
+                <input type="file" id="video-input" accept="video/*" style="display: none;" onchange="handleFileSelect(this)">
+            </div>
+            <div id="selected-file" style="margin-top: 16px; display: none;">
+                <div class="panel p-4">
+                    <p style="font-weight: 600;" id="file-name"></p>
+                    <p style="font-size: 0.75rem; color: var(--muted-foreground);" id="file-size"></p>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-full" id="upload-btn" onclick="uploadVideo()" disabled style="margin-top: 16px;">
+                Start Analysis
+            </button>
+            <div id="upload-progress" style="display: none; margin-top: 16px;">
+                <div class="progress-bar"><div class="progress-fill" id="progress-bar" style="width: 0%"></div></div>
+                <p style="margin-top: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--muted-foreground);" id="progress-text">Uploading...</p>
+            </div>
+            <div id="upload-result" style="display: none; margin-top: 16px;"></div>
+        </div>
+
+        <div class="panel p-5">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <h2 style="font-size: 1rem; font-weight: 600;">Videos in Uploads Folder</h2>
+                <button class="btn btn-secondary btn-sm" onclick="loadVideos()">Refresh</button>
+            </div>
+            <div id="videos-container">
+                <p style="text-align: center; color: var(--muted-foreground); padding: 24px;">Scanning uploads folder...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="annotated-section" style="display: none; margin-bottom: 24px;">
+        <div class="panel p-5">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <h2 style="font-size: 1rem; font-weight: 600;">Annotated Output Video</h2>
+                <span class="mono-label" id="annotated-label"></span>
+            </div>
+            <video id="annotated-player" controls style="width: 100%; max-height: 520px; border-radius: 8px; background: #000;"></video>
+            <div id="annotated-stats" style="margin-top: 12px; display: flex; gap: 16px; flex-wrap: wrap;"></div>
+        </div>
+    </div>
+
+    <div class="panel p-5">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <h2 style="font-size: 1rem; font-weight: 600;">Processing Jobs</h2>
+            <button class="btn btn-secondary btn-sm" onclick="loadJobs()">Refresh</button>
+        </div>
+        <div id="jobs-container"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var selectedFile = null;
+
+function handleFileSelect(input) {
+    selectedFile = input.files[0];
+    if (selectedFile) {
+        document.getElementById('file-name').textContent = selectedFile.name;
+        var sizeMB = (selectedFile.size / 1024 / 1024).toFixed(2);
+        document.getElementById('file-size').textContent = sizeMB + ' MB';
+        document.getElementById('selected-file').style.display = 'block';
+        document.getElementById('upload-btn').disabled = false;
+        document.getElementById('upload-btn').textContent = 'Start Analysis';
+    }
+}
+
+function uploadVideo() {
+    if (!selectedFile) return;
+
+    var btn = document.getElementById('upload-btn');
+    var progress = document.getElementById('upload-progress');
+    var result = document.getElementById('upload-result');
+
+    btn.disabled = true;
+    btn.textContent = 'Uploading...';
+    progress.style.display = 'block';
+    result.style.display = 'none';
+
+    var formData = new FormData();
+    formData.append('video', selectedFile);
+
+    fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(resultObj) {
+        if (!resultObj.ok) {
+            throw new Error(resultObj.data.error || 'Upload failed');
+        }
+        var data = resultObj.data;
+        var info = '';
+        if (data.resolution) info += data.resolution;
+        if (data.fps) info += ' · ' + data.fps + ' FPS';
+        if (data.duration) info += ' · ' + data.duration + 's';
+        result.style.display = 'block';
+        result.innerHTML = '<div class="panel p-4" style="border: 1px solid rgba(47,93,120,0.3);">' +
+            '<p style="font-weight: 600; color: #2F5D78;">Processing Started</p>' +
+            '<p style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; margin-top: 4px;">Job ID: ' + data.job_id + '</p>' +
+            '<p style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 4px;">' + data.filename + (info ? ' · ' + info : '') + '</p>' +
+            '<p style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 4px;">YOLO detection, tracking, plate OCR, annotated video generation running.</p>' +
+            '</div>';
+        btn.textContent = 'Processing Started';
+        selectedFile = null;
+        document.getElementById('selected-file').style.display = 'none';
+        loadVideos();
+        loadJobs();
+    })
+    .catch(function(e) {
+        result.style.display = 'block';
+        result.innerHTML = '<div class="panel p-4" style="border: 1px solid rgba(192,57,43,0.3);"><p style="color: var(--destructive);">Upload failed: ' + e.message + '</p></div>';
+        btn.disabled = false;
+        btn.textContent = 'Start Analysis';
+    });
+}
+
+function processExistingVideo(filename) {
+    fetch('/api/upload/process-existing', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename: filename})
+    })
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(resultObj) {
+        if (!resultObj.ok) {
+            throw new Error(resultObj.data.error || 'Processing failed');
+        }
+        var data = resultObj.data;
+        var result = document.getElementById('upload-result');
+        result.style.display = 'block';
+        result.innerHTML = '<div class="panel p-4" style="border: 1px solid rgba(47,93,120,0.3);">' +
+            '<p style="font-weight: 600; color: #2F5D78;">Processing Started</p>' +
+            '<p style="font-family: \'IBM Plex Mono\', monospace; font-size: 0.75rem; margin-top: 4px;">Job ID: ' + data.job_id + '</p>' +
+            '<p style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 4px;">' + data.filename + '</p>' +
+            '</div>';
+        loadJobs();
+    })
+    .catch(function(e) {
+        var result = document.getElementById('upload-result');
+        result.style.display = 'block';
+        result.innerHTML = '<div class="panel p-4" style="border: 1px solid rgba(192,57,43,0.3);"><p style="color: var(--destructive);">Failed: ' + e.message + '</p></div>';
+    });
+}
+
+function loadVideos() {
+    fetch('/api/videos')
+    .then(function(res) { return res.json(); })
+    .then(function(videos) { renderVideos(videos); })
+    .catch(function() {
+        document.getElementById('videos-container').innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No videos found in uploads/ folder</p>';
+    });
+}
+
+function renderVideos(videos) {
+    var container = document.getElementById('videos-container');
+    if (!videos || !videos.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No videos found in uploads/ folder. Upload a video to get started.</p>';
+        return;
+    }
+
+    var html = '<div style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto;">';
+    videos.forEach(function(v) {
+        var statusBadge = v.status === 'ready'
+            ? '<span class="badge badge-success" style="font-size: 0.65rem;">Ready</span>'
+            : '<span class="badge badge-warning" style="font-size: 0.65rem;">Unreadable</span>';
+
+        var info = v.sizeFormatted || '';
+        if (v.duration) info += ' | ' + v.duration + 's';
+        if (v.width && v.height) info += ' | ' + v.width + 'x' + v.height;
+
+        html += '<div class="panel p-4" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;" onclick="selectVideo(\'' + v.filename + '\')">' +
+            '<div>' +
+            '<p style="font-weight: 600; font-family: \'IBM Plex Mono\', monospace; font-size: 0.875rem;">' + v.filename + '</p>' +
+            '<p style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 2px;">' + info + '</p>' +
+            '</div>' +
+            '<div style="display: flex; align-items: center; gap: 8px;">' +
+            statusBadge +
+            (v.status === 'ready' ? '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); processExistingVideo(\'' + v.filename + '\')">Process</button>' : '') +
+            '</div>' +
+            '</div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function selectVideo(filename) {
+    var result = document.getElementById('upload-result');
+    result.style.display = 'block';
+    result.innerHTML = '<div class="panel p-4">' +
+        '<p style="font-weight: 600;">Selected: ' + filename + '</p>' +
+        '<button class="btn btn-primary btn-sm" style="margin-top: 8px;" onclick="processExistingVideo(\'' + filename + '\')">Start Analysis</button>' +
+        '</div>';
+}
+
+function loadJobs() {
+    fetch('/api/jobs')
+    .then(function(res) { return res.json(); })
+    .then(function(jobs) { renderJobs(Array.isArray(jobs) ? jobs : []); })
+    .catch(function() {
+        document.getElementById('jobs-container').innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No jobs yet</p>';
+    });
+}
+
+function renderJobs(jobs) {
+    var container = document.getElementById('jobs-container');
+    if (!jobs.length) {
+        container.innerHTML = '<p style="text-align: center; color: var(--muted-foreground); padding: 24px;">No processing jobs yet. Upload or select a video to get started.</p>';
+        return;
+    }
+
+    container.innerHTML = jobs.map(function(j) {
+        var statusClass = j.status === 'COMPLETED' ? 'success' : j.status === 'FAILED' ? 'critical' : j.status === 'PROCESSING' ? 'processing' : 'info';
+        var html = '<div class="job-card">' +
+            '<div class="job-header">' +
+            '<div>' +
+            '<span class="job-id">' + j.jobId + '</span>' +
+            '<span class="text-muted" style="margin-left: 8px;">' + (j.videoFilename || '') + '</span>' +
+            '</div>' +
+            '<div style="display: flex; align-items: center; gap: 8px;">' +
+            '<span class="badge badge-' + statusClass + '">' + j.status + '</span>' +
+            (j.annotatedVideo ? '<button class="btn btn-primary btn-sm" onclick="playAnnotated(\'' + j.annotatedVideo + '\', \'' + (j.videoFilename || '') + '\')">View Annotated</button>' : '') +
+            '</div>' +
+            '</div>';
+
+        if (j.status === 'PROCESSING') {
+            var prog = j.progress || 0;
+            html += '<div class="progress-bar" style="margin-top: 8px;">' +
+                '<div class="progress-fill" style="width: ' + prog + '%"></div>' +
+                '</div>' +
+                '<p style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 4px;">' + prog + '% — ' + (j.framesProcessed || 0) + '/' + (j.totalFrames || 0) + ' frames</p>';
+        }
+
+        var meta = [];
+        if (j.videoFps) meta.push(j.videoFps + ' FPS');
+        if (j.videoWidth && j.videoHeight) meta.push(j.videoWidth + 'x' + j.videoHeight);
+        if (j.videoDuration) meta.push(j.videoDuration + 's');
+        if (meta.length) {
+            html += '<p style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 4px;">' + meta.join(' · ') + '</p>';
+        }
+
+        html += '<div class="job-stats">' +
+            '<div><div class="camera-stat-label">Frames</div><div class="camera-stat-value">' + (j.framesProcessed || 0).toLocaleString() + '</div></div>' +
+            '<div><div class="camera-stat-label">Vehicles</div><div class="camera-stat-value">' + (j.vehiclesDetected || 0) + '</div></div>' +
+            '<div><div class="camera-stat-label">Plates</div><div class="camera-stat-value">' + (j.platesDetected || 0) + '</div></div>' +
+            '<div><div class="camera-stat-label">OCR</div><div class="camera-stat-value">' + (j.ocrSuccesses || 0) + '</div></div>' +
+            '</div>';
+
+        if (j.errorMessage) {
+            html += '<p style="margin-top: 8px; font-size: 0.75rem; color: var(--destructive);">Error: ' + j.errorMessage + '</p>';
+        }
+
+        html += '</div>';
+        return html;
+    }).join('');
+}
+
+function playAnnotated(filename, sourceName) {
+    var section = document.getElementById('annotated-section');
+    var player = document.getElementById('annotated-player');
+    var label = document.getElementById('annotated-label');
+    section.style.display = 'block';
+    player.src = '/api/outputs/' + encodeURIComponent(filename) + '/stream';
+    label.textContent = filename;
+    player.load();
+    section.scrollIntoView({ behavior: 'smooth' });
+}
+
+loadVideos();
+loadJobs();
+setInterval(loadJobs, 3000);
+</script>
+{% endblock %}
