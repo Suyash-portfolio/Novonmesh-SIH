@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: navonmesh-sih26127
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: DATABASE_URL
+        value: ""
+      - key: FRAME_SKIP
+        value: "3"
+      - key: CONFIDENCE_THRESHOLD
+        value: "0.4"
+      - key: MAX_UPLOAD_MB
+        value: "2048"
+    healthCheckPath: /health
+    autoDeploy: true
